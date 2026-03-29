@@ -15,7 +15,7 @@ import (
 
 var restartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "Restart Gitea",
+	Short: "Restart Forgejo",
 	RunE:  runRestart,
 }
 
@@ -45,7 +45,7 @@ func runRestart(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			return fmt.Errorf("systemctl restart gitea: %w\n%s", err, out)
 		}
-		fmt.Println("✔ Gitea restarted (systemd)")
+		fmt.Println("✔ Forgejo restarted (systemd)")
 
 	default:
 		runner.KillExisting()
@@ -53,7 +53,7 @@ func runRestart(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("✔ Gitea restarted (PID %d)\n", pid)
+		fmt.Printf("✔ Forgejo restarted (PID %d)\n", pid)
 	}
 
 	if err := netutil.WaitForPort(port, 30); err != nil {

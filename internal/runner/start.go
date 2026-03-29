@@ -8,7 +8,7 @@ import (
 
 // StartBackground launches `gitea web --config <iniPath>` as a detached
 // background process, redirecting stdout+stderr to logFile.
-// FORGEJO_WORK_DIR is set so Gitea resolves paths correctly.
+// FORGEJO_WORK_DIR is set so Forgejo resolves paths correctly.
 // Returns the child PID.
 func StartBackground(giteaBin, iniPath, logFile, workDir string) (int, error) {
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o640)

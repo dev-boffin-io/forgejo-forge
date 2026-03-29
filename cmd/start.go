@@ -15,7 +15,7 @@ import (
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start a previously configured Gitea instance",
+	Short: "Start a previously configured Forgejo instance",
 	RunE:  runStart,
 }
 

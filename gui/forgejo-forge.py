@@ -281,7 +281,7 @@ def screen_aware_size(app: QApplication) -> tuple[int, int]:
 
 # ── Main window ───────────────────────────────────────────────────────────────
 
-class GiteaForgeGUI(QMainWindow):
+class ForgejoForgeGUI(QMainWindow):
     def __init__(self, app: QApplication):
         super().__init__()
         w, h = screen_aware_size(app)
@@ -561,7 +561,7 @@ class GiteaForgeGUI(QMainWindow):
         reply = QMessageBox.question(
             self,
             "Confirm uninstall",
-            "This will remove all Gitea data and configuration.\n\nAre you sure?",
+            "This will remove all Forgejo data and configuration.\n\nAre you sure?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -711,7 +711,7 @@ def main():
     if hasattr(Qt.ApplicationAttribute, "AA_UseHighDpiPixmaps"):
         app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
 
-    win = GiteaForgeGUI(app)
+    win = ForgejoForgeGUI(app)
     win.show()
     sys.exit(app.exec())
 

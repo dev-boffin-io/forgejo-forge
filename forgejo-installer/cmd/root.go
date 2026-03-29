@@ -103,7 +103,7 @@ func runUninstall(installedVer string) {
 		fatalf("Uninstall failed: %v\n", err)
 	}
 
-	fmt.Println(colorize(green, "  ✓ Gitea uninstalled successfully"))
+	fmt.Println(colorize(green, "  ✓ Forgejo uninstalled successfully"))
 }
 
 // ─── Core install logic ───────────────────────────────────────────────────────

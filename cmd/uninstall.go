@@ -8,7 +8,7 @@ import (
 
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall",
-	Short: "Remove Gitea config, data, and service files",
+	Short: "Remove Forgejo config, data, and service files",
 	RunE: func(_ *cobra.Command, _ []string) error {
 		return svc.Uninstall(detect.Env())
 	},

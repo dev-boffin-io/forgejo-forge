@@ -9,18 +9,18 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "forgejo-forge",
-	Short: "Gitea setup and management tool for systemd and proot environments",
-	Long: `forgejo-forge automates Gitea installation, configuration, and lifecycle
+	Short: "Forgejo setup and management tool for systemd and proot environments",
+	Long: `forgejo-forge automates Forgejo installation, configuration, and lifecycle
 management for both production (systemd) and proot/Termux environments.
 
 Commands:
-  setup      Install and configure Gitea
-  start      Start a configured Gitea instance
-  stop       Stop a running Gitea instance
-  restart    Restart Gitea
-  status     Show Gitea status and access URLs
-  logs       Follow Gitea logs
-  uninstall  Remove Gitea config, data, and service files`,
+  setup      Install and configure Forgejo
+  start      Start a configured Forgejo instance
+  stop       Stop a running Forgejo instance
+  restart    Restart Forgejo
+  status     Show Forgejo status and access URLs
+  logs       Follow Forgejo logs
+  uninstall  Remove Forgejo config, data, and service files`,
 }
 
 func Execute() {

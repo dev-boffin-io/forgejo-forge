@@ -11,7 +11,7 @@ import (
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop a running Gitea instance",
+	Short: "Stop a running Forgejo instance",
 	RunE:  runStop,
 }
 
@@ -31,7 +31,7 @@ func stopSystemd() error {
 	if err != nil {
 		return fmt.Errorf("systemctl stop gitea: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
-	fmt.Println("✔ Gitea stopped (systemd)")
+	fmt.Println("✔ Forgejo stopped (systemd)")
 	return nil
 }
 

@@ -10,7 +10,7 @@ import (
 	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
 )
 
-// Uninstall removes Gitea configuration, data, and service files.
+// Uninstall removes Forgejo configuration, data, and service files.
 // Prompts the user for confirmation before removing data.
 func Uninstall(mode detect.Mode) error {
 	paths, err := Resolve(mode)

@@ -15,7 +15,7 @@ var logsLines int
 
 var logsCmd = &cobra.Command{
 	Use:   "logs",
-	Short: "Show or follow Gitea logs",
+	Short: "Show or follow Forgejo logs",
 	RunE:  runLogs,
 }
 

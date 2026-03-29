@@ -36,7 +36,7 @@ func CreateUser(opts CreateOptions) error {
 
 	cmd := exec.Command(opts.ForgejoBin, args...)
 
-	// Gitea resolves paths relative to FORGEJO_WORK_DIR.
+	// Forgejo resolves paths relative to FORGEJO_WORK_DIR.
 	// Without this, it falls back to its compiled-in default and
 	// fails to find the config even when --config is supplied.
 	workDir := opts.WorkDir

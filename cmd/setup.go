@@ -26,7 +26,7 @@ var (
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "Install and configure Gitea (auto-detects systemd or proot)",
+	Short: "Install and configure Forgejo (auto-detects systemd or proot)",
 	RunE:  runSetup,
 }
 

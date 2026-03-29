@@ -10,7 +10,7 @@ var statusPort int
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show Gitea status and access URLs",
+	Short: "Show Forgejo status and access URLs",
 	Run: func(_ *cobra.Command, _ []string) {
 		svc.Status(detect.Env(), statusPort)
 	},
