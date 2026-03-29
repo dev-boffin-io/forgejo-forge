@@ -35,7 +35,7 @@ func WriteSystemd(iniPath string, p SystemdParams) (bool, error) {
 	if _, err := os.Stat(iniPath); err == nil {
 		return false, nil
 	}
-	return writeINI(iniPath, fmt.Sprintf(`APP_NAME  = Gitea
+	return writeINI(iniPath, fmt.Sprintf(`APP_NAME  = forgejo
 RUN_USER  = %s
 WORK_PATH = %s
 
@@ -70,7 +70,7 @@ func WriteProot(iniPath string, p ProotParams) (bool, error) {
 	if _, err := os.Stat(iniPath); err == nil {
 		return false, nil
 	}
-	return writeINI(iniPath, fmt.Sprintf(`APP_NAME  = Gitea (Proot)
+	return writeINI(iniPath, fmt.Sprintf(`APP_NAME  = Forgejo Forge
 RUN_USER  = %s
 WORK_PATH = %s
 
