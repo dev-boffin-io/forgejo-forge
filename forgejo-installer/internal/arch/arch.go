@@ -2,7 +2,7 @@ package arch
 
 import "runtime"
 
-// Primary returns the Gitea asset suffix for the current machine.
+// Primary returns the Forgejo asset suffix for the current machine.
 func Primary() string {
 	switch runtime.GOARCH {
 	case "arm64":

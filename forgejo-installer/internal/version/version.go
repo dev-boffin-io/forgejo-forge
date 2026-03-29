@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Forgejo latest release via Codeberg Gitea API.
+// Forgejo latest release via Codeberg Forgejo API.
 const apiURL = "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/latest"
 
 var semverRe = regexp.MustCompile(`\b(\d+)\.(\d+)\.(\d+)\b`)
