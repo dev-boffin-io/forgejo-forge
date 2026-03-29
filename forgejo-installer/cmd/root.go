@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dev-boffin-io/gitea-installer/internal/arch"
-	"github.com/dev-boffin-io/gitea-installer/internal/download"
-	"github.com/dev-boffin-io/gitea-installer/internal/install"
-	"github.com/dev-boffin-io/gitea-installer/internal/version"
+	"github.com/dev-boffin-io/forgejo-installer/internal/arch"
+	"github.com/dev-boffin-io/forgejo-installer/internal/download"
+	"github.com/dev-boffin-io/forgejo-installer/internal/install"
+	"github.com/dev-boffin-io/forgejo-installer/internal/version"
 )
 
 // ─── ANSI colours ────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ func Run(args []string) {
 
 	action := args[0]
 
-	fmt.Println(colorize(cyan, "─── Gitea Installer ───────────────────────────────"))
+	fmt.Println(colorize(cyan, "─── Forgejo Installer ───────────────────────────────"))
 	fmt.Printf("  Primary arch : %s\n", arch.Primary())
 
 	latestVer, err := version.Latest()
@@ -64,7 +64,7 @@ func Run(args []string) {
 
 func runInstall(installedVer, latestVer string) {
 	if installedVer != "none" {
-		fmt.Println(colorize(yellow, "Gitea is already installed. Use 'update' to upgrade."))
+		fmt.Println(colorize(yellow, "Forgejo is already installed. Use 'update' to upgrade."))
 		return
 	}
 	installVersion(latestVer)
@@ -72,7 +72,7 @@ func runInstall(installedVer, latestVer string) {
 
 func runUpdate(installedVer, latestVer string) {
 	if installedVer == "none" {
-		fatalf("Gitea is not installed. Run 'install' first.\n")
+		fatalf("Forgejo is not installed. Run 'install' first.\n")
 	}
 	if installedVer == latestVer {
 		fmt.Printf("%s\n", colorize(green, "Already on the latest version ("+latestVer+")."))
@@ -84,13 +84,13 @@ func runUpdate(installedVer, latestVer string) {
 
 func runUninstall(installedVer string) {
 	if installedVer == "none" {
-		fmt.Println(colorize(yellow, "Gitea is not installed. Nothing to remove."))
+		fmt.Println(colorize(yellow, "Forgejo is not installed. Nothing to remove."))
 		return
 	}
 
 	fmt.Printf("  Installed version: %s\n", installedVer)
 
-	fmt.Print("  Are you sure you want to uninstall Gitea? (y/N): ")
+	fmt.Print("  Are you sure you want to uninstall Forgejo? (y/N): ")
 	var input string
 	fmt.Scanln(&input)
 
@@ -143,17 +143,17 @@ func installVersion(ver string) {
 		}
 
 		fmt.Printf("\n%s\n",
-			colorize(green, fmt.Sprintf("  ✓ Gitea %s installed (%s) → %s", ver, a, install.Destination())))
+			colorize(green, fmt.Sprintf("  ✓ Forgejo %s installed (%s) → %s", ver, a, install.Destination())))
 		return
 	}
 
-	fatalf("All architectures failed. Gitea %s could not be installed.\n", ver)
+	fatalf("All architectures failed. Forgejo %s could not be installed.\n", ver)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 func usage() {
-	fmt.Println("Usage: gitea-installer <install|update|upgrade|uninstall>")
+	fmt.Println("Usage: forgejo-installer <install|update|upgrade|uninstall>")
 }
 
 func fatalf(format string, args ...any) {

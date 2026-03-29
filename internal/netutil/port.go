@@ -31,17 +31,17 @@ func IsPortFree(port int) bool {
 // after maxRetries seconds.
 func WaitForPort(port, maxRetries int) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	fmt.Printf("▶ Waiting for Gitea on port %d", port)
+	fmt.Printf("▶ Waiting for Forgejo on port %d", port)
 	for i := range maxRetries {
 		conn, err := net.DialTimeout("tcp", addr, oneSecond)
 		if err == nil {
 			conn.Close()
-			fmt.Printf("\n✔ Gitea is up (attempt %d)\n", i+1)
+			fmt.Printf("\n✔ Forgejo is up (attempt %d)\n", i+1)
 			return nil
 		}
 		fmt.Print(".")
 		sleep(oneSecond)
 	}
 	fmt.Println()
-	return fmt.Errorf("gitea did not start within %ds", maxRetries)
+	return fmt.Errorf("forgejo did not start within %ds", maxRetries)
 }

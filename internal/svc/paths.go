@@ -4,7 +4,7 @@ import (
 	"os/user"
 	"path/filepath"
 
-	"github.com/dev-boffin-io/gitea-forge/internal/detect"
+	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
 )
 
 // Paths holds all filesystem paths for a given mode.
@@ -20,19 +20,19 @@ func Resolve(mode detect.Mode) (Paths, error) {
 	switch mode {
 	case detect.ModeSystemd:
 		return Paths{
-			IniPath:     "/etc/gitea/app.ini",
+			IniPath:     "/etc/forgejo/app.ini",
 			LogFile:     "", // journalctl handles logs
-			SystemdUnit: "gitea",
+			SystemdUnit: "forgejo",
 		}, nil
 	default: // proot
 		u, err := user.Current()
 		if err != nil {
 			return Paths{}, err
 		}
-		base := filepath.Join(u.HomeDir, "forge-storage", "gitea")
+		base := filepath.Join(u.HomeDir, "forge-storage", "forgejo")
 		return Paths{
 			IniPath: filepath.Join(base, "custom", "conf", "app.ini"),
-			LogFile: filepath.Join(base, "data", "log", "gitea.log"),
+			LogFile: filepath.Join(base, "data", "log", "forgejo.log"),
 			BaseDir: base,
 		}, nil
 	}

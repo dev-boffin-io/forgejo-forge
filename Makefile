@@ -1,17 +1,17 @@
-BINARY    := gitea-forge
-MODULE    := github.com/dev-boffin-io/gitea-forge
+BINARY    := forgejo-forge
+MODULE    := github.com/dev-boffin-io/forgejo-forge
 VERSION   := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS           := -ldflags "-s -w -X main.version=$(VERSION)"
 INSTALLER_LDFLAGS := -ldflags "-s -w"
 
 # Installer sub-project
-INSTALLER_DIR    := gitea-installer
-INSTALLER_BINARY := gitea-main
+INSTALLER_DIR    := forgejo-installer
+INSTALLER_BINARY := forgejo-main
 
 # GUI
-GUI_SRC   := gui/gitea-forge.py
-GUI_ICON  := gui/gitea-forge.png
-GUI_APP   := gitea-forge-gui
+GUI_SRC   := gui/forgejo-forge.py
+GUI_ICON  := gui/forgejo-forge.png
+GUI_APP   := forgejo-forge-gui
 
 VENV      := .venv
 VENV_BIN  := $(VENV)/bin
@@ -127,7 +127,7 @@ $(VENV): check-venv-pkg
 	fi
 	@echo "✅ venv ready"
 
-# ─── GUI: Build (PyInstaller → bin/gitea-forge-gui) ─────────────────
+# ─── GUI: Build (PyInstaller → bin/forgejo-forge-gui) ─────────────────
 gui-build: $(VENV)
 	@mkdir -p bin
 	@rm -f bin/$(GUI_APP)
@@ -174,7 +174,7 @@ install-gui:
 		$(BIN_INSTALL)/$(GUI_APP)
 	@echo "✅ Symlink → $(BIN_INSTALL)/$(GUI_APP)"
 	@mkdir -p $(DESKTOP_DIR)
-	@printf '[Desktop Entry]\nName=Gitea Forge\nExec="%s"\nType=Application\nTerminal=false\nCategories=Network;Development;\n%s\n' \
+	@printf '[Desktop Entry]\nName=Forgejo Forge\nExec="%s"\nType=Application\nTerminal=false\nCategories=Network;Development;\n%s\n' \
 		"$(BIN_INSTALL)/$(GUI_APP)" \
 		"$(if $(ICON_ABS),Icon=$(ICON_ABS),)" \
 		> $(DESKTOP_DIR)/$(GUI_APP).desktop
@@ -203,27 +203,27 @@ clean:
 .PHONY: help
 help:
 	@echo ""
-	@echo "  gitea-forge — Makefile targets"
+	@echo "  forgejo-forge — Makefile targets"
 	@echo ""
 	@echo "  ── Go CLI ──────────────────────────────────────────────"
-	@echo "  build              Build bin/gitea-forge (native)"
-	@echo "  build-amd64        Build bin/gitea-forge-amd64"
-	@echo "  build-arm64        Build bin/gitea-forge-arm64"
+	@echo "  build              Build bin/forgejo-forge (native)"
+	@echo "  build-amd64        Build bin/forgejo-forge-amd64"
+	@echo "  build-arm64        Build bin/forgejo-forge-arm64"
 	@echo "  build-all          Build amd64 + arm64"
 	@echo ""
 	@echo "  ── Installer ───────────────────────────────────────────"
-	@echo "  installer          Build bin/gitea-main (native)"
-	@echo "  installer-amd64    Build bin/gitea-main-amd64"
-	@echo "  installer-arm64    Build bin/gitea-main-arm64"
+	@echo "  installer          Build bin/forgejo-main (native)"
+	@echo "  installer-amd64    Build bin/forgejo-main-amd64"
+	@echo "  installer-arm64    Build bin/forgejo-main-arm64"
 	@echo "  installer-all      Build installer amd64 + arm64"
 	@echo ""
 	@echo "  ── GUI ─────────────────────────────────────────────────"
-	@echo "  gui-build          Build bin/gitea-forge-gui (PyInstaller)"
+	@echo "  gui-build          Build bin/forgejo-forge-gui (PyInstaller)"
 	@echo ""
 	@echo "  ── Install ─────────────────────────────────────────────"
-	@echo "  install            Symlink gitea-forge → ~/.local/bin/"
-	@echo "  install-installer  Symlink gitea-main  → ~/.local/bin/"
-	@echo "  install-gui        Symlink gitea-forge-gui + .desktop entry"
+	@echo "  install            Symlink forgejo-forge → ~/.local/bin/"
+	@echo "  install-installer  Symlink forgejo-main  → ~/.local/bin/"
+	@echo "  install-gui        Symlink forgejo-forge-gui + .desktop entry"
 	@echo "  uninstall          Remove all symlinks + desktop entry"
 	@echo ""
 	@echo "  ── Other ───────────────────────────────────────────────"

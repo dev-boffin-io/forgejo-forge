@@ -11,15 +11,15 @@ import (
 
 // CreateOptions holds parameters for the admin user create command.
 type CreateOptions struct {
-	GiteaBin string
+	ForgejoBin string
 	IniPath  string
-	WorkDir  string // GITEA_WORK_DIR — must match WORK_PATH in app.ini
+	WorkDir  string // FORGEJO_WORK_DIR — must match WORK_PATH in app.ini
 	Username string
 	Password string
 	Email    string
 }
 
-// CreateUser runs `gitea admin user create` with the given options.
+// CreateUser runs `forgejo admin user create` with the given options.
 // Returns nil if the user was created or already exists.
 func CreateUser(opts CreateOptions) error {
 	fmt.Printf("▶ Creating admin user %q...\n", opts.Username)
@@ -34,16 +34,16 @@ func CreateUser(opts CreateOptions) error {
 		"--admin",
 	}
 
-	cmd := exec.Command(opts.GiteaBin, args...)
+	cmd := exec.Command(opts.ForgejoBin, args...)
 
-	// Gitea resolves paths relative to GITEA_WORK_DIR.
+	// Gitea resolves paths relative to FORGEJO_WORK_DIR.
 	// Without this, it falls back to its compiled-in default and
 	// fails to find the config even when --config is supplied.
 	workDir := opts.WorkDir
 	if workDir == "" {
 		workDir = filepath.Dir(filepath.Dir(opts.IniPath)) // …/custom/conf → …
 	}
-	cmd.Env = append(os.Environ(), "GITEA_WORK_DIR="+workDir)
+	cmd.Env = append(os.Environ(), "FORGEJO_WORK_DIR="+workDir)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -53,7 +53,7 @@ func CreateUser(opts CreateOptions) error {
 			fmt.Println("⚠ Admin user already exists, skipping")
 			return nil
 		}
-		return fmt.Errorf("gitea admin user create: %w\n%s", err, out)
+		return fmt.Errorf("forgejo admin user create: %w\n%s", err, out)
 	}
 
 	fmt.Println("✔ Admin user created")

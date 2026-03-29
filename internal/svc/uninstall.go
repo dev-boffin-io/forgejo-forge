@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/dev-boffin-io/gitea-forge/internal/detect"
+	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
 )
 
 // Uninstall removes Gitea configuration, data, and service files.
@@ -18,7 +18,7 @@ func Uninstall(mode detect.Mode) error {
 		return err
 	}
 
-	fmt.Println("⚠  This will remove Gitea config, data, and service files.")
+	fmt.Println("⚠  This will remove Forgejo config, data, and service files.")
 	if !confirm("Continue? [y/N]: ") {
 		fmt.Println("Aborted.")
 		return nil
@@ -45,7 +45,7 @@ func uninstallSystemd(paths Paths) error {
 	}
 
 	// Remove unit file
-	unitFile := "/etc/systemd/system/gitea.service"
+	unitFile := "/etc/systemd/system/forgejo.service"
 	if err := os.Remove(unitFile); err != nil && !os.IsNotExist(err) {
 		fmt.Printf("⚠ remove %s: %v\n", unitFile, err)
 	} else {
@@ -56,23 +56,23 @@ func uninstallSystemd(paths Paths) error {
 	_ = exec.Command("systemctl", "daemon-reload").Run()
 
 	// Remove config dir
-	removeDir("/etc/gitea")
+	removeDir("/etc/forgejo")
 
 	// Remove data dir
-	removeDir("/var/lib/gitea")
+	removeDir("/var/lib/forgejo")
 
-	fmt.Println("✔ Gitea uninstalled (systemd)")
+	fmt.Println("✔ Forgejo uninstalled (systemd)")
 	return nil
 }
 
 func uninstallProot(paths Paths) error {
 	// Kill process
-	_ = exec.Command("pkill", "-f", "gitea web").Run()
+	_ = exec.Command("pkill", "-f", "forgejo web").Run()
 
 	// Remove data tree
 	removeDir(paths.BaseDir)
 
-	fmt.Println("✔ Gitea uninstalled (proot)")
+	fmt.Println("✔ Forgejo uninstalled (proot)")
 	return nil
 }
 

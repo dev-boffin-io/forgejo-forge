@@ -1,8 +1,8 @@
-# gitea-forge
+# forgejo-forge
 
 > Part of the [Forge Suite](https://github.com/dev-boffin-io) by [@dev-boffin-io](https://github.com/dev-boffin-io)
 
-A self-contained Gitea management suite for Linux — supports both production
+A self-contained Forgejo management suite for Linux — supports both production
 (systemd) and proot/Termux (ARM64) environments.
 
 ---
@@ -11,16 +11,16 @@ A self-contained Gitea management suite for Linux — supports both production
 
 | Binary | Description |
 |--------|-------------|
-| `gitea-forge` | CLI — setup, start, stop, restart, status, logs, uninstall |
-| `gitea-main` | Installer — install, update, upgrade, uninstall Gitea binary |
-| `gitea-forge-gui` | PyQt6 GUI frontend for `gitea-forge` |
+| `forgejo-forge` | CLI — setup, start, stop, restart, status, logs, uninstall |
+| `forgejo-main` | Installer — install, update, upgrade, uninstall Forgejo binary |
+| `forgejo-forge-gui` | PyQt6 GUI frontend for `forgejo-forge` |
 
 ---
 
 ## Requirements
 
 - Linux (Debian/Ubuntu, or proot/Termux ARM64)
-- `gitea` binary in `PATH` (install with `gitea-main`)
+- `forgejo` binary in `PATH` (install with `forgejo-main`)
 - Python 3.10+ and `python3-venv` (GUI build only)
 
 ---
@@ -28,58 +28,58 @@ A self-contained Gitea management suite for Linux — supports both production
 ## Quick Start
 
 ```bash
-# 1. Install Gitea binary
-gitea-main install
+# 1. Install Forgejo binary
+forgejo-main install
 
 # 2. Setup Gitea (proot / Termux)
-gitea-forge setup --username admin --password yourpassword
+forgejo-forge setup --username admin --password yourpassword
 
 # 3. Or with custom port and domain
-gitea-forge setup --username admin --password yourpassword --port 3000 --domain git.local
+forgejo-forge setup --username admin --password yourpassword --port 3000 --domain git.local
 
 # 4. Check status
-gitea-forge status
+forgejo-forge status
 
 # 5. Open GUI
-gitea-forge-gui
+forgejo-forge-gui
 ```
 
 For systemd (production server):
 ```bash
-sudo gitea-forge setup --username admin --password yourpassword
+sudo forgejo-forge setup --username admin --password yourpassword
 ```
 
 ---
 
-## gitea-main — Gitea Binary Installer
+## forgejo-main — Gitea Binary Installer
 
-Downloads and manages the official Gitea binary from GitHub releases.
+Downloads and manages the official Forgejo binary from GitHub releases.
 Auto-detects architecture (amd64, arm64, riscv64).
 
 ```bash
-gitea-main install      # Download and install latest Gitea
-gitea-main update       # Check for updates
-gitea-main upgrade      # Upgrade to latest version
-gitea-main uninstall    # Remove Gitea binary
+forgejo-main install      # Download and install latest Gitea
+forgejo-main update       # Check for updates
+forgejo-main upgrade      # Upgrade to latest version
+forgejo-main uninstall    # Remove Forgejo binary
 ```
 
 ---
 
-## gitea-forge CLI
+## forgejo-forge CLI
 
 ```bash
-gitea-forge setup      [--username] [--password] [--email] [--port] [--domain]
-gitea-forge start
-gitea-forge stop
-gitea-forge restart
-gitea-forge status
-gitea-forge logs       [-f] [-n <lines>]
-gitea-forge uninstall
+forgejo-forge setup      [--username] [--password] [--email] [--port] [--domain]
+forgejo-forge start
+forgejo-forge stop
+forgejo-forge restart
+forgejo-forge status
+forgejo-forge logs       [-f] [-n <lines>]
+forgejo-forge uninstall
 ```
 
 Auto-detects environment on every run:
-- **systemd mode** — requires `sudo`, uses `/etc/gitea/` and `/var/lib/gitea/`
-- **proot mode** — runs as current user, uses `~/forge-storage/gitea/`
+- **systemd mode** — requires `sudo`, uses `/etc/forgejo/` and `/var/lib/forgejo/`
+- **proot mode** — runs as current user, uses `~/forge-storage/forgejo/`
 
 ### Setup flags
 
@@ -95,8 +95,8 @@ Auto-detects environment on every run:
 
 | Mode | Config | Data |
 |------|--------|------|
-| systemd | `/etc/gitea/app.ini` | `/var/lib/gitea/` |
-| proot | `~/forge-storage/gitea/custom/conf/app.ini` | `~/forge-storage/gitea/` |
+| systemd | `/etc/forgejo/app.ini` | `/var/lib/forgejo/` |
+| proot | `~/forge-storage/forgejo/custom/conf/app.ini` | `~/forge-storage/forgejo/` |
 
 ### Package registries
 
@@ -121,11 +121,11 @@ sudo apt install golang python3-venv
 make all
 
 # Individual targets
-make build              # bin/gitea-forge  (native)
-make build-arm64        # bin/gitea-forge-arm64
-make installer          # bin/gitea-main   (native)
-make installer-arm64    # bin/gitea-main-arm64
-make gui-build          # bin/gitea-forge-gui (PyInstaller)
+make build              # bin/forgejo-forge  (native)
+make build-arm64        # bin/forgejo-forge-arm64
+make installer          # bin/forgejo-main   (native)
+make installer-arm64    # bin/forgejo-main-arm64
+make gui-build          # bin/forgejo-forge-gui (PyInstaller)
 
 # Install to ~/.local/bin/
 make install
@@ -147,21 +147,21 @@ make help
 ## Project Structure
 
 ```
-gitea-forge/
-├── main.go                     # gitea-forge CLI entry point
+forgejo-forge/
+├── main.go                     # forgejo-forge CLI entry point
 ├── cmd/                        # CLI subcommands
 │   ├── setup.go
 │   ├── start.go  stop.go  restart.go
 │   ├── status.go  logs.go  uninstall.go
 │   └── root.go
 ├── internal/
-│   ├── admin/      # gitea admin user create wrapper
+│   ├── admin/      # forgejo admin user create wrapper
 │   ├── config/     # app.ini writer + reader
 │   ├── detect/     # systemd vs proot detection
 │   ├── netutil/    # port detection, LAN IP, cloudflared URL
 │   ├── runner/     # background process management
 │   └── svc/        # status, paths, uninstall logic
-├── gitea-installer/            # gitea-main sub-project
+├── forgejo-installer/            # forgejo-main sub-project
 │   ├── main.go
 │   ├── cmd/
 │   └── internal/
@@ -170,8 +170,8 @@ gitea-forge/
 │       ├── install/    # install/uninstall logic
 │       └── version/    # version fetching
 ├── gui/
-│   ├── gitea-forge.py          # PyQt6 GUI
-│   ├── gitea-forge.png         # App icon
+│   ├── forgejo-forge.py          # PyQt6 GUI
+│   ├── forgejo-forge.png         # App icon
 │   └── requirements.txt
 └── Makefile
 ```

@@ -7,12 +7,12 @@ import (
 	"os/user"
 	"path/filepath"
 
-	"github.com/dev-boffin-io/gitea-forge/internal/admin"
-	"github.com/dev-boffin-io/gitea-forge/internal/config"
-	"github.com/dev-boffin-io/gitea-forge/internal/detect"
-	"github.com/dev-boffin-io/gitea-forge/internal/netutil"
-	"github.com/dev-boffin-io/gitea-forge/internal/runner"
-	"github.com/dev-boffin-io/gitea-forge/internal/svc"
+	"github.com/dev-boffin-io/forgejo-forge/internal/admin"
+	"github.com/dev-boffin-io/forgejo-forge/internal/config"
+	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
+	"github.com/dev-boffin-io/forgejo-forge/internal/netutil"
+	"github.com/dev-boffin-io/forgejo-forge/internal/runner"
+	"github.com/dev-boffin-io/forgejo-forge/internal/svc"
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +45,7 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 		flagEmail = admin.DefaultEmail(flagUsername)
 	}
 
-	giteaBin := detect.GiteaBin()
+	giteaBin := detect.ForgejoBin()
 	if giteaBin == "" {
 		return fmt.Errorf("❌ gitea not found in PATH")
 	}
@@ -76,13 +76,13 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 
 func setupSystemd(giteaBin string) error {
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("❌ systemd mode requires root (sudo gitea-forge setup ...)")
+		return fmt.Errorf("❌ systemd mode requires root (sudo forgejo-forge setup ...)")
 	}
 
 	const (
 		giteaUser = "git"
-		giteaHome = "/var/lib/gitea"
-		giteaConf = "/etc/gitea"
+		giteaHome = "/var/lib/forgejo"
+		giteaConf = "/etc/forgejo"
 	)
 
 	paths, _ := svc.Resolve(detect.ModeSystemd)
@@ -111,7 +111,7 @@ func setupSystemd(giteaBin string) error {
 	written, err := config.WriteSystemd(paths.IniPath, config.SystemdParams{
 		RunUser:  giteaUser,
 		WorkPath: giteaHome,
-		DBPath:   filepath.Join(giteaHome, "data", "gitea.db"),
+		DBPath:   filepath.Join(giteaHome, "data", "forgejo.db"),
 		RepoRoot: filepath.Join(giteaHome, "repositories"),
 		Port:     flagPort,
 		RootURL:  rootURL,
@@ -147,9 +147,9 @@ func setupSystemd(giteaBin string) error {
 		return err
 	}
 	if err := admin.CreateUser(admin.CreateOptions{
-		GiteaBin: giteaBin,
+		ForgejoBin: giteaBin,
 		IniPath:  paths.IniPath,
-		WorkDir:  "/var/lib/gitea",
+		WorkDir:  "/var/lib/forgejo",
 		Username: flagUsername,
 		Password: flagPassword,
 		Email:    flagEmail,
@@ -162,9 +162,9 @@ func setupSystemd(giteaBin string) error {
 }
 
 func writeSystemdUnit(giteaBin, iniPath string) error {
-	const unitPath = "/etc/systemd/system/gitea.service"
+	const unitPath = "/etc/systemd/system/forgejo.service"
 	content := fmt.Sprintf(`[Unit]
-Description=Gitea
+Description=Forgejo
 After=network.target
 
 [Service]
@@ -214,7 +214,7 @@ func setupProot(giteaBin string) error {
 	written, err := config.WriteProot(paths.IniPath, config.ProotParams{
 		RunUser:  currentUser.Username,
 		WorkPath: paths.BaseDir,
-		DBPath:   filepath.Join(paths.BaseDir, "data", "gitea.db"),
+		DBPath:   filepath.Join(paths.BaseDir, "data", "forgejo.db"),
 		RepoRoot: filepath.Join(paths.BaseDir, "repositories"),
 		Port:     flagPort,
 		RootURL:  rootURL,
@@ -241,7 +241,7 @@ func setupProot(giteaBin string) error {
 		return err
 	}
 	if err := admin.CreateUser(admin.CreateOptions{
-		GiteaBin: giteaBin,
+		ForgejoBin: giteaBin,
 		IniPath:  paths.IniPath,
 		WorkDir:  paths.BaseDir,
 		Username: flagUsername,
@@ -272,9 +272,9 @@ func printSummary(mode string, port int, username, password, logFile string) {
 		fmt.Printf("📄 Log:  %s\n", logFile)
 	}
 	if mode == "systemd" {
-		fmt.Println("🛑 Stop: sudo gitea-forge stop")
+		fmt.Println("🛑 Stop: sudo forgejo-forge stop")
 	} else {
-		fmt.Println("🛑 Stop: gitea-forge stop")
+		fmt.Println("🛑 Stop: forgejo-forge stop")
 	}
 }
 

@@ -28,7 +28,7 @@ type ProotParams struct {
 	LogPath  string
 }
 
-// WriteSystemd writes /etc/gitea/app.ini for systemd mode.
+// WriteSystemd writes /etc/forgejo/app.ini for systemd mode.
 // INSTALL_LOCK = true so gitea admin user create works immediately.
 // Returns (written bool, error). written=false means file already existed.
 func WriteSystemd(iniPath string, p SystemdParams) (bool, error) {

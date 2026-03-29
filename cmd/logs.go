@@ -5,8 +5,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/dev-boffin-io/gitea-forge/internal/detect"
-	"github.com/dev-boffin-io/gitea-forge/internal/svc"
+	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
+	"github.com/dev-boffin-io/forgejo-forge/internal/svc"
 	"github.com/spf13/cobra"
 )
 

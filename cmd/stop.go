@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/dev-boffin-io/gitea-forge/internal/detect"
+	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
 	"github.com/spf13/cobra"
 )
 
@@ -36,10 +36,10 @@ func stopSystemd() error {
 }
 
 func stopProot() error {
-	if err := exec.Command("pkill", "-f", "gitea web").Run(); err != nil {
-		fmt.Println("⚠ No running Gitea process found")
+	if err := exec.Command("pkill", "-f", "forgejo web").Run(); err != nil {
+		fmt.Println("⚠ No running Forgejo process found")
 		return nil
 	}
-	fmt.Println("✔ Gitea stopped (proot)")
+	fmt.Println("✔ Forgejo stopped (proot)")
 	return nil
 }

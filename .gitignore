@@ -4,7 +4,7 @@ bin/
 
 # ── Go ───────────────────────────────────────────────────────────────
 go.sum
-gitea-installer/go.sum
+forgejo-installer/go.sum
 
 # ── Python / PyInstaller ─────────────────────────────────────────────
 __pycache__/

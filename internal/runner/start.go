@@ -8,7 +8,7 @@ import (
 
 // StartBackground launches `gitea web --config <iniPath>` as a detached
 // background process, redirecting stdout+stderr to logFile.
-// GITEA_WORK_DIR is set so Gitea resolves paths correctly.
+// FORGEJO_WORK_DIR is set so Gitea resolves paths correctly.
 // Returns the child PID.
 func StartBackground(giteaBin, iniPath, logFile, workDir string) (int, error) {
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o640)
@@ -19,11 +19,11 @@ func StartBackground(giteaBin, iniPath, logFile, workDir string) (int, error) {
 	cmd := exec.Command(giteaBin, "web", "--config", iniPath)
 	cmd.Stdout = f
 	cmd.Stderr = f
-	cmd.Env = append(os.Environ(), "GITEA_WORK_DIR="+workDir)
+	cmd.Env = append(os.Environ(), "FORGEJO_WORK_DIR="+workDir)
 
 	if err := cmd.Start(); err != nil {
 		f.Close()
-		return 0, fmt.Errorf("start gitea: %w", err)
+		return 0, fmt.Errorf("start forgejo: %w", err)
 	}
 
 	// Detach: let the child live independently.
@@ -38,5 +38,5 @@ func StartBackground(giteaBin, iniPath, logFile, workDir string) (int, error) {
 // KillExisting sends SIGTERM to any running `gitea web` process via pkill.
 // Silently ignores "no process found" errors.
 func KillExisting() {
-	_ = exec.Command("pkill", "-f", "gitea web").Run()
+	_ = exec.Command("pkill", "-f", "forgejo web").Run()
 }

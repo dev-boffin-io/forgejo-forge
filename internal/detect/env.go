@@ -24,9 +24,9 @@ func Env() Mode {
 	return ModeSystemd
 }
 
-// GiteaBin returns the full path to the gitea binary or an empty string.
-func GiteaBin() string {
-	path, err := exec.LookPath("gitea")
+// ForgejoBin returns the full path to the gitea binary or an empty string.
+func ForgejoBin() string {
+	path, err := exec.LookPath("forgejo")
 	if err != nil {
 		return ""
 	}

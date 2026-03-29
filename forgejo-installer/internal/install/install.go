@@ -85,7 +85,7 @@ func RemoveBinary() error {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 func isWritable(dir string) bool {
-	probe := filepath.Join(dir, ".gitea-write-test")
+	probe := filepath.Join(dir, ".forgejo-write-test")
 	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return false

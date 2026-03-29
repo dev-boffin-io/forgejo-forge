@@ -5,11 +5,11 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/dev-boffin-io/gitea-forge/internal/config"
-	"github.com/dev-boffin-io/gitea-forge/internal/detect"
-	"github.com/dev-boffin-io/gitea-forge/internal/netutil"
-	"github.com/dev-boffin-io/gitea-forge/internal/runner"
-	"github.com/dev-boffin-io/gitea-forge/internal/svc"
+	"github.com/dev-boffin-io/forgejo-forge/internal/config"
+	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
+	"github.com/dev-boffin-io/forgejo-forge/internal/netutil"
+	"github.com/dev-boffin-io/forgejo-forge/internal/runner"
+	"github.com/dev-boffin-io/forgejo-forge/internal/svc"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,7 @@ func runRestart(_ *cobra.Command, _ []string) error {
 	mode := detect.Env()
 	fmt.Printf("▶ Mode: %s\n", mode)
 
-	giteaBin := detect.GiteaBin()
+	giteaBin := detect.ForgejoBin()
 	if giteaBin == "" {
 		return fmt.Errorf("❌ gitea not found in PATH")
 	}

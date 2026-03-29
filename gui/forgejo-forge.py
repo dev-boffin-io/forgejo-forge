@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-gitea-forge GUI
-PyQt6 frontend for the gitea-forge CLI binary.
+forgejo-forge GUI
+PyQt6 frontend for the forgejo-forge CLI binary.
 """
 
 import os
@@ -18,9 +18,9 @@ from PyQt6.QtGui import QFont, QColor, QPalette, QTextCursor
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-APP_NAME    = "gitea-forge"
+APP_NAME    = "forgejo-forge"
 APP_VERSION = "1.0.0"
-BINARY_NAME = "gitea-forge"
+BINARY_NAME = "forgejo-forge"
 
 # Catppuccin Mocha
 BG_BASE    = "#1e1e2e"
@@ -162,7 +162,7 @@ QFrame#divider {{
 # ── Worker thread ─────────────────────────────────────────────────────────────
 
 class CommandWorker(QThread):
-    """Runs a gitea-forge subcommand in a background thread."""
+    """Runs a forgejo-forge subcommand in a background thread."""
     output_line = pyqtSignal(str)
     finished    = pyqtSignal(int)   # exit code
 
@@ -173,7 +173,7 @@ class CommandWorker(QThread):
     def run(self):
         binary = find_binary()
         if not binary:
-            self.output_line.emit("❌ gitea-forge binary not found in PATH or ./bin/")
+            self.output_line.emit("❌ forgejo-forge binary not found in PATH or ./bin/")
             self.finished.emit(1)
             return
 
@@ -210,7 +210,7 @@ class LogFollowWorker(QThread):
     def run(self):
         binary = find_binary()
         if not binary:
-            self.output_line.emit("❌ gitea-forge binary not found")
+            self.output_line.emit("❌ forgejo-forge binary not found")
             self.finished.emit(1)
             return
 
@@ -241,13 +241,13 @@ class LogFollowWorker(QThread):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def find_binary() -> str | None:
-    """Locate gitea-forge binary.
+    """Locate forgejo-forge binary.
 
     Search order:
     1. PATH  (works after 'make install')
     2. Same directory as this executable  (frozen PyInstaller build:
-       both gitea-forge and gitea-forge-gui live in bin/)
-    3. ./bin/ relative to CWD  (running from source: python3 gui/gitea-forge.py)
+       both forgejo-forge and forgejo-forge-gui live in bin/)
+    3. ./bin/ relative to CWD  (running from source: python3 gui/forgejo-forge.py)
     4. ../bin/ relative to script location
     """
     # 1. PATH
@@ -570,7 +570,7 @@ class GiteaForgeGUI(QMainWindow):
         binary = find_binary()
         if not binary:
             return
-        self._console_write("$ gitea-forge uninstall\n")
+        self._console_write("$ forgejo-forge uninstall\n")
         try:
             result = subprocess.run(
                 [binary, "uninstall"],

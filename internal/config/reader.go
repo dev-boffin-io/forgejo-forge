@@ -35,7 +35,7 @@ func ReadPort(iniPath string, defaultPort int) int {
 // Exists returns nil when iniPath is present, or a descriptive error.
 func Exists(iniPath string) error {
 	if _, err := os.Stat(iniPath); os.IsNotExist(err) {
-		return fmt.Errorf("config not found: %s\n  → run 'gitea-forge setup' first", iniPath)
+		return fmt.Errorf("config not found: %s\n  → run 'forgejo-forge setup' first", iniPath)
 	}
 	return nil
 }

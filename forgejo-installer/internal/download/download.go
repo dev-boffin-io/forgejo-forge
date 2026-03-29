@@ -8,13 +8,15 @@ import (
 	"time"
 )
 
-const baseURL = "https://dl.gitea.com/gitea"
+// Forgejo releases are hosted on Codeberg:
+// https://codeberg.org/forgejo/forgejo/releases/download/v9.0.3/forgejo-9.0.3-linux-arm64
+const baseURL = "https://codeberg.org/forgejo/forgejo/releases/download"
 
 var httpClient = &http.Client{Timeout: 5 * time.Minute}
 
-// AssetURL builds the download URL for a given version and arch suffix.
+// AssetURL builds the Codeberg download URL for a given version and arch suffix.
 func AssetURL(version, archSuffix string) string {
-	return fmt.Sprintf("%s/%s/gitea-%s-%s", baseURL, version, version, archSuffix)
+	return fmt.Sprintf("%s/v%s/forgejo-%s-%s", baseURL, version, version, archSuffix)
 }
 
 // Exists sends a HEAD request to check whether the asset URL is reachable.
@@ -41,7 +43,7 @@ func ToFile(url string, progress io.Writer) (string, error) {
 		return "", fmt.Errorf("server returned HTTP %d for %s", resp.StatusCode, url)
 	}
 
-	tmp, err := os.CreateTemp("", "gitea-*.tmp")
+	tmp, err := os.CreateTemp("", "forgejo-*.tmp")
 	if err != nil {
 		return "", fmt.Errorf("create temp file: %w", err)
 	}
@@ -69,7 +71,7 @@ func ToFile(url string, progress io.Writer) (string, error) {
 	return tmp.Name(), nil
 }
 
-// ─── Simple progress reader ──────────────────────────────────────────────────
+// ─── Simple progress reader ───────────────────────────────────────────────────
 
 type progressReader struct {
 	r       io.Reader
@@ -82,6 +84,6 @@ func (p *progressReader) Read(buf []byte) (int, error) {
 	n, err := p.r.Read(buf)
 	p.written += int64(n)
 	pct := float64(p.written) / float64(p.total) * 100
-	fmt.Fprintf(p.out, "\r  Downloading... %.1f%%", pct)
+	fmt.Fprintf(p.out, "\r Downloading... %.1f%%", pct)
 	return n, err
 }

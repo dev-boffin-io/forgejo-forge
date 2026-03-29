@@ -1,4 +1,4 @@
-module github.com/dev-boffin-io/gitea-forge
+module github.com/dev-boffin-io/forgejo-forge
 
 go 1.22
 

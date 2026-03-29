@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/dev-boffin-io/gitea-installer/cmd"
+	"github.com/dev-boffin-io/forgejo-installer/cmd"
 )
 
 func main() {

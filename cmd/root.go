@@ -8,9 +8,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gitea-forge",
+	Use:   "forgejo-forge",
 	Short: "Gitea setup and management tool for systemd and proot environments",
-	Long: `gitea-forge automates Gitea installation, configuration, and lifecycle
+	Long: `forgejo-forge automates Gitea installation, configuration, and lifecycle
 management for both production (systemd) and proot/Termux environments.
 
 Commands:

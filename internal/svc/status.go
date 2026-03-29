@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/dev-boffin-io/gitea-forge/internal/detect"
-	"github.com/dev-boffin-io/gitea-forge/internal/netutil"
+	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
+	"github.com/dev-boffin-io/forgejo-forge/internal/netutil"
 )
 
 // Status prints the current Gitea service status and access URLs.
@@ -25,18 +25,18 @@ func statusSystemd(port int) {
 	out, err := exec.Command("systemctl", "is-active", "gitea").Output()
 	state := strings.TrimSpace(string(out))
 	if err != nil || state != "active" {
-		fmt.Printf("● Gitea: %s\n", state)
+		fmt.Printf("● Forgejo: %s\n", state)
 		return
 	}
-	fmt.Println("● Gitea: active (running)")
+	fmt.Println("● Forgejo: active (running)")
 	netutil.PrintAccessURLs(port)
 }
 
 func statusProot(port int) {
 	if !netutil.IsPortFree(port) {
-		fmt.Printf("● Gitea: running (port %d)\n", port)
+		fmt.Printf("● Forgejo: running (port %d)\n", port)
 		netutil.PrintAccessURLs(port)
 	} else {
-		fmt.Printf("● Gitea: stopped (port %d is free)\n", port)
+		fmt.Printf("● Forgejo: stopped (port %d is free)\n", port)
 	}
 }
