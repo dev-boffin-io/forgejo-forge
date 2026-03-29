@@ -31,7 +31,7 @@ A self-contained Forgejo management suite for Linux — supports both production
 # 1. Install Forgejo binary
 forgejo-main install
 
-# 2. Setup Gitea (proot / Termux)
+# 2. Setup Forgejo (proot / Termux)
 forgejo-forge setup --username admin --password yourpassword
 
 # 3. Or with custom port and domain
@@ -51,7 +51,7 @@ sudo forgejo-forge setup --username admin --password yourpassword
 
 ---
 
-## forgejo-main — Gitea Binary Installer
+## forgejo-main — Forgejo Binary Installer
 
 Downloads and manages the official Forgejo binary from GitHub releases.
 Auto-detects architecture (amd64, arm64, riscv64).
@@ -100,7 +100,7 @@ Auto-detects environment on every run:
 
 ### Package registries
 
-All Gitea package registries are enabled by default:
+All Forgejo package registries are enabled by default:
 
 | Type | Endpoint |
 |------|----------|
