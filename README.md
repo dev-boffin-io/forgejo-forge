@@ -57,7 +57,7 @@ Downloads and manages the official Forgejo binary from GitHub releases.
 Auto-detects architecture (amd64, arm64, riscv64).
 
 ```bash
-forgejo-main install      # Download and install latest Gitea
+forgejo-main install      # Download and install latest Forgejo
 forgejo-main update       # Check for updates
 forgejo-main upgrade      # Upgrade to latest version
 forgejo-main uninstall    # Remove Forgejo binary
