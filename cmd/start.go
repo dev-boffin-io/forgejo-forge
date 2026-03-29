@@ -47,7 +47,7 @@ func runStart(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			return fmt.Errorf("systemctl start gitea: %w\n%s", err, out)
 		}
-		fmt.Println("✔ Gitea started (systemd)")
+		fmt.Println("✔ Forgejo started (systemd)")
 
 	default:
 		runner.KillExisting()
@@ -55,7 +55,7 @@ func runStart(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("✔ Gitea started (PID %d)\n", pid)
+		fmt.Printf("✔ Forgejo started (PID %d)\n", pid)
 	}
 
 	if err := netutil.WaitForPort(port, 30); err != nil {

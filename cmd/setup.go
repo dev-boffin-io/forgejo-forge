@@ -235,7 +235,7 @@ func setupProot(giteaBin string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("✔ Gitea started (PID %d)\n", pid)
+	fmt.Printf("✔ Forgejo started (PID %d)\n", pid)
 
 	if err := netutil.WaitForPort(flagPort, 30); err != nil {
 		return err
@@ -265,7 +265,7 @@ func buildRootURL(domain string, port int) string {
 }
 
 func printSummary(mode string, port int, username, password, logFile string) {
-	fmt.Printf("\n🚀 Gitea running (%s mode)\n", mode)
+	fmt.Printf("\n🚀 Forgejo running (%s mode)\n", mode)
 	netutil.PrintAccessURLs(port)
 	fmt.Printf("👤 %s / %s\n", username, password)
 	if logFile != "" {

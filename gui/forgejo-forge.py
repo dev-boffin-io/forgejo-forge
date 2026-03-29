@@ -455,7 +455,7 @@ class GiteaForgeGUI(QMainWindow):
         danger = QGroupBox("Danger zone")
         dl = QVBoxLayout(danger)
         danger.setStyleSheet(f"QGroupBox {{ border-color: {RED}; color: {RED}; }}")
-        self.btn_uninstall = QPushButton("🗑  Uninstall Gitea")
+        self.btn_uninstall = QPushButton("🗑  Uninstall Forgejo")
         self.btn_uninstall.setObjectName("btn_uninstall")
         self.btn_uninstall.setFixedHeight(52)
         self.btn_uninstall.clicked.connect(self._run_uninstall)
@@ -636,7 +636,7 @@ class GiteaForgeGUI(QMainWindow):
 
         try:
             result = subprocess.run(
-                [binary, "status"],
+                [binary, "status", "--port", str(self.inp_port.value())],
                 capture_output=True, text=True, timeout=5,
             )
             output = result.stdout + result.stderr
