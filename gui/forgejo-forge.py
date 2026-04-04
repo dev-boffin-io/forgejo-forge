@@ -11,7 +11,7 @@ import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QGroupBox, QSpinBox,
-    QTabWidget, QFrame, QSizePolicy, QMessageBox, QCheckBox,
+    QTabWidget, QFrame, QSizePolicy, QMessageBox, QCheckBox, QComboBox,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QProcess
 from PyQt6.QtGui import QFont, QColor, QPalette, QTextCursor
@@ -317,6 +317,7 @@ class ForgejoForgeGUI(QMainWindow):
         tabs = QTabWidget()
         tabs.addTab(self._make_setup_tab(),   "⚙  Setup")
         tabs.addTab(self._make_control_tab(), "▶  Control")
+        tabs.addTab(self._make_email_tab(),   "📧  Email")
         tabs.addTab(self._make_logs_tab(),    "📄  Logs")
         root.addWidget(tabs, stretch=1)
 
@@ -464,6 +465,133 @@ class ForgejoForgeGUI(QMainWindow):
 
         lay.addStretch()
         return w
+
+    # ── Email / Mailer tab ────────────────────────────────────────────
+
+    def _make_email_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(12)
+
+        # ── Sender ────────────────────────────────────────────────────
+        grp_sender = QGroupBox("Sender identity")
+        sg = QVBoxLayout(grp_sender)
+
+        row_from = QHBoxLayout()
+        row_from.addWidget(QLabel("FROM address"))
+        self.inp_mail_from = QLineEdit()
+        self.inp_mail_from.setPlaceholderText("forgejo@yourdomain.com")
+        row_from.addWidget(self.inp_mail_from)
+        sg.addLayout(row_from)
+
+        lay.addWidget(grp_sender)
+
+        # ── SMTP server ───────────────────────────────────────────────
+        grp_smtp = QGroupBox("SMTP server")
+        smg = QVBoxLayout(grp_smtp)
+
+        row_addr = QHBoxLayout()
+        row_addr.addWidget(QLabel("SMTP host"))
+        self.inp_mail_addr = QLineEdit("smtp.gmail.com")
+        row_addr.addWidget(self.inp_mail_addr)
+        row_addr.addSpacing(16)
+        row_addr.addWidget(QLabel("Port"))
+        self.inp_mail_port = QSpinBox()
+        self.inp_mail_port.setRange(1, 65535)
+        self.inp_mail_port.setValue(465)
+        self.inp_mail_port.setFixedWidth(110)
+        row_addr.addWidget(self.inp_mail_port)
+        smg.addLayout(row_addr)
+
+        row_proto = QHBoxLayout()
+        row_proto.addWidget(QLabel("Protocol"))
+        self.cmb_mail_proto = QComboBox()
+        self.cmb_mail_proto.addItems(["smtps  (SSL/TLS — port 465)", "smtp  (STARTTLS — port 587)"])
+        self.cmb_mail_proto.currentIndexChanged.connect(self._mail_proto_changed)
+        row_proto.addWidget(self.cmb_mail_proto)
+        row_proto.addStretch()
+        smg.addLayout(row_proto)
+
+        lay.addWidget(grp_smtp)
+
+        # ── Credentials ───────────────────────────────────────────────
+        grp_creds = QGroupBox("SMTP credentials")
+        cg = QVBoxLayout(grp_creds)
+
+        row_user = QHBoxLayout()
+        row_user.addWidget(QLabel("User (email)"))
+        self.inp_mail_user = QLineEdit()
+        self.inp_mail_user.setPlaceholderText("yourname@gmail.com")
+        row_user.addWidget(self.inp_mail_user)
+        cg.addLayout(row_user)
+
+        row_pass = QHBoxLayout()
+        row_pass.addWidget(QLabel("Password"))
+        self.inp_mail_passwd = QLineEdit()
+        self.inp_mail_passwd.setEchoMode(QLineEdit.EchoMode.Password)
+        self.inp_mail_passwd.setPlaceholderText("App Password (Gmail 2FA) or SMTP password")
+        row_pass.addWidget(self.inp_mail_passwd)
+        cg.addLayout(row_pass)
+
+        lay.addWidget(grp_creds)
+
+        # ── Help note ─────────────────────────────────────────────────
+        note = QLabel(
+            "💡 Gmail: enable 2FA → create an App Password at myaccount.google.com/apppasswords\n"
+            "   Free alternatives: Brevo (brevo.com), Mailgun, Cloudflare Email Routing"
+        )
+        note.setStyleSheet(f"font-size: 15px; color: {FG_SUBTLE};")
+        note.setWordWrap(True)
+        lay.addWidget(note)
+
+        # ── Actions ───────────────────────────────────────────────────
+        btn_row = QHBoxLayout()
+        self.btn_email_apply = QPushButton("📧  Apply Mailer Config")
+        self.btn_email_apply.setObjectName("btn_email_apply")
+        self.btn_email_apply.setFixedHeight(52)
+        self.btn_email_apply.clicked.connect(self._run_email_setup)
+
+        btn_restart = QPushButton("🔄  Restart Now")
+        btn_restart.setFixedHeight(52)
+        btn_restart.setMinimumWidth(200)
+        btn_restart.clicked.connect(self._run_restart)
+
+        btn_row.addStretch()
+        btn_row.addWidget(self.btn_email_apply)
+        btn_row.addWidget(btn_restart)
+        lay.addLayout(btn_row)
+
+        lay.addStretch()
+        return w
+
+    def _mail_proto_changed(self, index: int):
+        """Auto-set the default port when the user changes the protocol."""
+        self.inp_mail_port.setValue(465 if index == 0 else 587)
+
+    def _run_email_setup(self):
+        mail_from   = self.inp_mail_from.text().strip()
+        smtp_addr   = self.inp_mail_addr.text().strip()
+        smtp_port   = str(self.inp_mail_port.value())
+        proto_index = self.cmb_mail_proto.currentIndex()
+        protocol    = "smtps" if proto_index == 0 else "smtp"
+        user        = self.inp_mail_user.text().strip()
+        passwd      = self.inp_mail_passwd.text()
+
+        if not mail_from or not user or not passwd:
+            QMessageBox.warning(self, "Missing fields",
+                                "FROM address, User, and Password are all required.")
+            return
+
+        self._run_command([
+            "email-setup",
+            "--from",      mail_from,
+            "--smtp-addr", smtp_addr,
+            "--smtp-port", smtp_port,
+            "--protocol",  protocol,
+            "--user",      user,
+            "--passwd",    passwd,
+        ])
 
     # ── Logs tab ──────────────────────────────────────────────────────
 
@@ -685,7 +813,8 @@ class ForgejoForgeGUI(QMainWindow):
         widget.moveCursor(QTextCursor.MoveOperation.End)
 
     def _set_buttons_enabled(self, enabled: bool):
-        for name in ("btn_setup", "btn_start", "btn_stop", "btn_restart", "btn_uninstall"):
+        for name in ("btn_setup", "btn_start", "btn_stop", "btn_restart",
+                     "btn_uninstall", "btn_email_apply"):
             if hasattr(self, name):
                 getattr(self, name).setEnabled(enabled)
 

@@ -11,7 +11,7 @@ A self-contained Forgejo management suite for Linux — supports both production
 
 | Binary | Description |
 |--------|-------------|
-| `forgejo-forge` | CLI — setup, start, stop, restart, status, logs, uninstall |
+| `forgejo-forge` | CLI — setup, start, stop, restart, status, logs, email-setup, uninstall |
 | `forgejo-main` | Installer — install, update, upgrade, uninstall Forgejo binary |
 | `forgejo-forge-gui` | PyQt6 GUI frontend for `forgejo-forge` |
 
@@ -40,7 +40,13 @@ forgejo-forge setup --username admin --password yourpassword --port 3000 --domai
 # 4. Check status
 forgejo-forge status
 
-# 5. Open GUI
+# 5. Configure email (optional)
+forgejo-forge email-setup \
+  --from   forgejo@yourdomain.com \
+  --user   yourname@gmail.com \
+  --passwd "xxxx xxxx xxxx xxxx"
+
+# 6. Open GUI
 forgejo-forge-gui
 ```
 
@@ -68,12 +74,13 @@ forgejo-main uninstall    # Remove Forgejo binary
 ## forgejo-forge CLI
 
 ```bash
-forgejo-forge setup      [--username] [--password] [--email] [--port] [--domain]
+forgejo-forge setup       [--username] [--password] [--email] [--port] [--domain]
 forgejo-forge start
 forgejo-forge stop
 forgejo-forge restart
 forgejo-forge status
-forgejo-forge logs       [-f] [-n <lines>]
+forgejo-forge logs        [-f] [-n <lines>]
+forgejo-forge email-setup [--from] [--user] [--passwd] [--smtp-addr] [--smtp-port] [--protocol]
 forgejo-forge uninstall
 ```
 
@@ -90,6 +97,47 @@ Auto-detects environment on every run:
 | `--email` | `<username>@example.com` | Admin email |
 | `--port` | `3000` | HTTP port (auto-increments if busy) |
 | `--domain` | — | Custom domain for `ROOT_URL` |
+
+### email-setup flags
+
+Patches (or appends) the `[mailer]` section in the active `app.ini`.
+Run `forgejo-forge restart` after applying to activate the changes.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--from` | *(required)* | Sender address shown in outgoing mail |
+| `--user` | *(required)* | SMTP login username (usually your email) |
+| `--passwd` | *(required)* | SMTP password or App Password |
+| `--smtp-addr` | `smtp.gmail.com` | SMTP server hostname |
+| `--smtp-port` | `465` | SMTP port (465 for smtps, 587 for smtp/STARTTLS) |
+| `--protocol` | `smtps` | `smtps` (SSL/TLS) or `smtp` (STARTTLS) |
+
+**Examples:**
+
+```bash
+# Gmail with App Password (smtps / port 465)
+forgejo-forge email-setup \
+  --from   forgejo@yourdomain.com \
+  --user   yourname@gmail.com \
+  --passwd "xxxx xxxx xxxx xxxx" \
+  --smtp-addr smtp.gmail.com \
+  --smtp-port 465 --protocol smtps
+
+# Brevo / Mailgun STARTTLS (port 587)
+forgejo-forge email-setup \
+  --from   forgejo@yourdomain.com \
+  --user   apikey \
+  --passwd "your-api-key" \
+  --smtp-addr smtp-relay.brevo.com \
+  --smtp-port 587 --protocol smtp
+```
+
+> **Gmail tip:** Enable 2FA on your Google account, then generate an App Password at
+> [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+> Free alternatives: [Brevo](https://www.brevo.com), Mailgun, Cloudflare Email Routing.
+
+After setting up email, test it from the Forgejo Admin Panel:
+**Site Administration → Configuration → SMTP Mailer Configuration → Send Test Mail**
 
 ### Data paths
 
@@ -153,10 +201,11 @@ forgejo-forge/
 │   ├── setup.go
 │   ├── start.go  stop.go  restart.go
 │   ├── status.go  logs.go  uninstall.go
+│   ├── email.go                # email-setup command
 │   └── root.go
 ├── internal/
 │   ├── admin/      # forgejo admin user create wrapper
-│   ├── config/     # app.ini writer + reader
+│   ├── config/     # app.ini writer, reader, mailer patcher
 │   ├── detect/     # systemd vs proot detection
 │   ├── netutil/    # port detection, LAN IP, cloudflared URL
 │   ├── runner/     # background process management
@@ -170,7 +219,7 @@ forgejo-forge/
 │       ├── install/    # install/uninstall logic
 │       └── version/    # version fetching
 ├── gui/
-│   ├── forgejo-forge.py          # PyQt6 GUI
+│   ├── forgejo-forge.py          # PyQt6 GUI (tabs: Setup · Control · Email · Logs)
 │   ├── forgejo-forge.png         # App icon
 │   └── requirements.txt
 └── Makefile

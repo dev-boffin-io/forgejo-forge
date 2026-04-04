@@ -14,13 +14,14 @@ var rootCmd = &cobra.Command{
 management for both production (systemd) and proot/Termux environments.
 
 Commands:
-  setup      Install and configure Forgejo
-  start      Start a configured Forgejo instance
-  stop       Stop a running Forgejo instance
-  restart    Restart Forgejo
-  status     Show Forgejo status and access URLs
-  logs       Follow Forgejo logs
-  uninstall  Remove Forgejo config, data, and service files`,
+  setup        Install and configure Forgejo
+  start        Start a configured Forgejo instance
+  stop         Stop a running Forgejo instance
+  restart      Restart Forgejo
+  status       Show Forgejo status and access URLs
+  logs         Follow Forgejo logs
+  email-setup  Configure SMTP mailer in app.ini
+  uninstall    Remove Forgejo config, data, and service files`,
 }
 
 func Execute() {
@@ -31,6 +32,7 @@ func Execute() {
 		restartCmd,
 		statusCmd,
 		logsCmd,
+		emailCmd,
 		uninstallCmd,
 	)
 
