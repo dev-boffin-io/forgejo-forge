@@ -291,6 +291,12 @@ class ForgejoForgeGUI(QMainWindow):
 
         self._worker: CommandWorker | None = None
         self._log_worker: LogFollowWorker | None = None
+        self._log_buffer: list[str] = []
+
+        # Drains _log_buffer → log_view every 100 ms (avoids per-line repaint freeze)
+        self._log_timer = QTimer(self)
+        self._log_timer.setInterval(100)
+        self._log_timer.timeout.connect(self._flush_log_buffer)
 
         self._build_ui()
         self._check_binary()
@@ -714,9 +720,10 @@ class ForgejoForgeGUI(QMainWindow):
 
     def _toggle_logs(self):
         if self._log_worker and self._log_worker.isRunning():
+            # Stop — do NOT call .wait() here; it blocks the main thread → freeze
+            self._log_timer.stop()
             self._log_worker.stop()
-            self._log_worker.wait()
-            self._log_worker = None
+            self._log_worker = None          # thread finishes in background
             self.btn_logs.setText("📄  Show Logs")
             return
 
@@ -725,12 +732,14 @@ class ForgejoForgeGUI(QMainWindow):
             args.append("-f")
 
         self.log_view.clear()
+        self._log_buffer.clear()
+
         self._log_worker = LogFollowWorker(args)
-        self._log_worker.output_line.connect(
-            lambda line: self._append_log(self.log_view, line)
-        )
-        self._log_worker.finished.connect(lambda _: self.btn_logs.setText("📄  Show Logs"))
+        # Buffer lines — do NOT connect directly to append (causes per-line repaint)
+        self._log_worker.output_line.connect(self._log_buffer.append)
+        self._log_worker.finished.connect(self._on_log_finished)
         self._log_worker.start()
+        self._log_timer.start()
         self.btn_logs.setText("⏹  Stop Logs")
 
     # ── Generic command runner ────────────────────────────────────────
@@ -807,6 +816,39 @@ class ForgejoForgeGUI(QMainWindow):
         self.console.append(line)
         self.console.moveCursor(QTextCursor.MoveOperation.End)
 
+    def _flush_log_buffer(self):
+        """Drain _log_buffer into log_view in one batch — called every 100 ms."""
+        if not self._log_buffer:
+            return
+
+        lines, self._log_buffer[:] = self._log_buffer[:], []
+
+        MAX_LINES = 2000
+        doc  = self.log_view.document()
+        cur  = self.log_view.textCursor()
+
+        self.log_view.setUpdatesEnabled(False)
+
+        # Append all buffered lines in a single cursor operation
+        cur.movePosition(QTextCursor.MoveOperation.End)
+        cur.insertText("\n".join(lines) + "\n")
+
+        # Trim oldest lines if document exceeds MAX_LINES
+        while doc.blockCount() > MAX_LINES + 1:
+            trim = QTextCursor(doc.begin())
+            trim.select(QTextCursor.SelectionType.BlockUnderCursor)
+            trim.removeSelectedText()
+            trim.deleteChar()           # remove the trailing block separator
+
+        self.log_view.setUpdatesEnabled(True)
+        self.log_view.moveCursor(QTextCursor.MoveOperation.End)
+
+    def _on_log_finished(self, _code: int):
+        """Called when LogFollowWorker exits (process ended or was stopped)."""
+        self._log_timer.stop()
+        self._flush_log_buffer()        # drain any remaining lines
+        self.btn_logs.setText("📄  Show Logs")
+
     def _append_log(self, widget: QTextEdit, line: str):
         widget.setTextColor(QColor(FG_TEXT))
         widget.append(line)
@@ -821,12 +863,13 @@ class ForgejoForgeGUI(QMainWindow):
     # ── Cleanup ───────────────────────────────────────────────────────
 
     def closeEvent(self, event):
+        self._log_timer.stop()
         if self._log_worker and self._log_worker.isRunning():
             self._log_worker.stop()
-            self._log_worker.wait()
+            self._log_worker.wait(2000)   # max 2 s — don't block forever
         if self._worker and self._worker.isRunning():
             self._worker.terminate()
-            self._worker.wait()
+            self._worker.wait(2000)
         event.accept()
 
 
