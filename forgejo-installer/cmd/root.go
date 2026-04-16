@@ -153,7 +153,7 @@ func installVersion(ver string) {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 func usage() {
-	fmt.Println("Usage: forgejo-installer <install|update|upgrade|uninstall>")
+	fmt.Println("Usage: forgejo-main <install|update|upgrade|uninstall>")
 }
 
 func fatalf(format string, args ...any) {

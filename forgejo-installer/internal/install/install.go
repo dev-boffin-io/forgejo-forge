@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	binName    = "gitea"
+	binName    = "forgejo"
 	installDir = "/usr/local/bin"
 )
 
