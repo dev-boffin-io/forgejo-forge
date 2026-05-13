@@ -15,7 +15,13 @@ const (
 	giteaBase   = "https://dl.gitea.com/gitea"
 )
 
-var httpClient = &http.Client{Timeout: 5 * time.Minute}
+var httpClient = &http.Client{
+	Timeout: 5 * time.Minute,
+	Transport: &http.Transport{
+		ForceAttemptHTTP2:   false,
+		TLSHandshakeTimeout: 10 * time.Second,
+	},
+}
 
 // AssetURL builds the full download URL for a given source, version, and arch suffix.
 //
@@ -36,16 +42,18 @@ func AssetURL(source, version, archSuffix string) string {
 	}
 }
 
-// Exists sends a HEAD request to check whether the asset URL is reachable.
+// Exists checks whether the asset URL is reachable using a 1-byte Range GET.
+// This avoids HEAD (which Codeberg sometimes blocks) and HTTP/2 stream issues.
 func Exists(url string) bool {
-	req, _ := http.NewRequest("HEAD", url, nil)
+	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", "forgejo-installer/1.0")
+	req.Header.Set("Range", "bytes=0-0") // fetch only 1 byte
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return false
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	return resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent
 }
 
 // ToFile downloads url into a new temp file and returns its path.
