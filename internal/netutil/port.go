@@ -3,10 +3,14 @@ package netutil
 import (
 	"fmt"
 	"net"
+	"time"
 )
 
+const oneSecond = time.Second
+
+func sleep(d time.Duration) { time.Sleep(d) }
+
 // FindFreePort returns the first free TCP port starting from preferredPort.
-// If preferredPort is free it is returned unchanged.
 // Checks up to 20 ports before giving up.
 func FindFreePort(preferredPort int) (int, error) {
 	for port := preferredPort; port < preferredPort+20; port++ {

@@ -11,7 +11,6 @@ import (
 )
 
 // Status prints the current Forgejo service status and access URLs.
-// Port is read directly from app.ini — no need to pass it manually.
 func Status(mode detect.Mode, _ int) {
 	fmt.Printf("▶ Mode: %s\n", mode)
 
@@ -26,8 +25,8 @@ func Status(mode detect.Mode, _ int) {
 	switch mode {
 	case detect.ModeSystemd:
 		statusSystemd(port)
-	default:
-		statusProot(port)
+	default: // proot and windows both use port-based detection
+		statusPortBased(port)
 	}
 }
 
@@ -42,7 +41,8 @@ func statusSystemd(port int) {
 	netutil.PrintAccessURLs(port)
 }
 
-func statusProot(port int) {
+// statusPortBased checks if the port is occupied (works for proot and Windows).
+func statusPortBased(port int) {
 	if !netutil.IsPortFree(port) {
 		fmt.Printf("● Forgejo: running (port %d)\n", port)
 		netutil.PrintAccessURLs(port)

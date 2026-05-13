@@ -26,8 +26,9 @@ PREFIX      ?= $(HOME)/.local
 BIN_INSTALL := $(PREFIX)/bin
 DESKTOP_DIR := $(HOME)/.local/share/applications
 
-.PHONY: help all build build-arm64 build-amd64 build-all prepare clean check \
-        installer installer-arm64 installer-amd64 installer-all \
+.PHONY: help all build build-arm64 build-amd64 build-windows build-windows-arm64 build-all \
+        prepare clean check \
+        installer installer-arm64 installer-amd64 installer-windows installer-windows-arm64 installer-all \
         gui-build install install-gui install-installer \
         uninstall check-python check-venv-pkg
 
@@ -77,12 +78,26 @@ build-amd64: prepare
 	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY)-amd64 .
 	@echo "✅ Built → bin/$(BINARY)-amd64"
 
+# ─── Go: Build Windows amd64 ────────────────────────────────────────
+build-windows: prepare
+	@mkdir -p bin
+	@GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY)-windows-amd64.exe .
+	@echo "✅ Built → bin/$(BINARY)-windows-amd64.exe"
+
+# ─── Go: Build Windows arm64 ────────────────────────────────────────
+build-windows-arm64: prepare
+	@mkdir -p bin
+	@GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY)-windows-arm64.exe .
+	@echo "✅ Built → bin/$(BINARY)-windows-arm64.exe"
+
 # ─── Go: Build main all ─────────────────────────────────────────────
 build-all: prepare
 	@mkdir -p bin
 	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY)-amd64 .
 	@GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY)-arm64 .
-	@echo "✅ Built amd64 + arm64 → bin/"
+	@GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY)-windows-amd64.exe .
+	@GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY)-windows-arm64.exe .
+	@echo "✅ Built all platforms → bin/"
 
 # ─── Go: Build installer (native) ───────────────────────────────────
 installer: prepare-installer
@@ -102,12 +117,26 @@ installer-amd64: prepare-installer
 	@cd $(INSTALLER_DIR) && GOOS=linux GOARCH=amd64 go build $(INSTALLER_LDFLAGS) -o ../bin/$(INSTALLER_BINARY)-amd64 .
 	@echo "✅ Built → bin/$(INSTALLER_BINARY)-amd64"
 
+# ─── Go: Build installer Windows amd64 ─────────────────────────────
+installer-windows: prepare-installer
+	@mkdir -p bin
+	@cd $(INSTALLER_DIR) && GOOS=windows GOARCH=amd64 go build $(INSTALLER_LDFLAGS) -o ../bin/$(INSTALLER_BINARY)-windows-amd64.exe .
+	@echo "✅ Built → bin/$(INSTALLER_BINARY)-windows-amd64.exe"
+
+# ─── Go: Build installer Windows arm64 ─────────────────────────────
+installer-windows-arm64: prepare-installer
+	@mkdir -p bin
+	@cd $(INSTALLER_DIR) && GOOS=windows GOARCH=arm64 go build $(INSTALLER_LDFLAGS) -o ../bin/$(INSTALLER_BINARY)-windows-arm64.exe .
+	@echo "✅ Built → bin/$(INSTALLER_BINARY)-windows-arm64.exe"
+
 # ─── Go: Build installer all ────────────────────────────────────────
 installer-all: prepare-installer
 	@mkdir -p bin
 	@cd $(INSTALLER_DIR) && GOOS=linux GOARCH=amd64 go build $(INSTALLER_LDFLAGS) -o ../bin/$(INSTALLER_BINARY)-amd64 .
 	@cd $(INSTALLER_DIR) && GOOS=linux GOARCH=arm64 go build $(INSTALLER_LDFLAGS) -o ../bin/$(INSTALLER_BINARY)-arm64 .
-	@echo "✅ Built installer amd64 + arm64 → bin/"
+	@cd $(INSTALLER_DIR) && GOOS=windows GOARCH=amd64 go build $(INSTALLER_LDFLAGS) -o ../bin/$(INSTALLER_BINARY)-windows-amd64.exe .
+	@cd $(INSTALLER_DIR) && GOOS=windows GOARCH=arm64 go build $(INSTALLER_LDFLAGS) -o ../bin/$(INSTALLER_BINARY)-windows-arm64.exe .
+	@echo "✅ Built installer all platforms → bin/"
 
 # ─── Go: Vet ────────────────────────────────────────────────────────
 check: prepare
@@ -200,35 +229,38 @@ clean:
 	@echo "🧹 Clean done"
 
 # ─── Help ────────────────────────────────────────────────────────────
-.PHONY: help
 help:
 	@echo ""
 	@echo "  forgejo-forge — Makefile targets"
 	@echo ""
 	@echo "  ── Go CLI ──────────────────────────────────────────────"
-	@echo "  build              Build bin/forgejo-forge (native)"
-	@echo "  build-amd64        Build bin/forgejo-forge-amd64"
-	@echo "  build-arm64        Build bin/forgejo-forge-arm64"
-	@echo "  build-all          Build amd64 + arm64"
+	@echo "  build                  Build bin/forgejo-forge (native)"
+	@echo "  build-amd64            Build bin/forgejo-forge-amd64"
+	@echo "  build-arm64            Build bin/forgejo-forge-arm64"
+	@echo "  build-windows          Build bin/forgejo-forge-windows-amd64.exe"
+	@echo "  build-windows-arm64    Build bin/forgejo-forge-windows-arm64.exe"
+	@echo "  build-all              Build all platforms"
 	@echo ""
 	@echo "  ── Installer ───────────────────────────────────────────"
-	@echo "  installer          Build bin/forgejo-main (native)"
-	@echo "  installer-amd64    Build bin/forgejo-main-amd64"
-	@echo "  installer-arm64    Build bin/forgejo-main-arm64"
-	@echo "  installer-all      Build installer amd64 + arm64"
+	@echo "  installer              Build bin/forgejo-main (native)"
+	@echo "  installer-amd64        Build bin/forgejo-main-amd64"
+	@echo "  installer-arm64        Build bin/forgejo-main-arm64"
+	@echo "  installer-windows      Build bin/forgejo-main-windows-amd64.exe"
+	@echo "  installer-windows-arm64 Build bin/forgejo-main-windows-arm64.exe"
+	@echo "  installer-all          Build installer all platforms"
 	@echo ""
 	@echo "  ── GUI ─────────────────────────────────────────────────"
-	@echo "  gui-build          Build bin/forgejo-forge-gui (PyInstaller)"
+	@echo "  gui-build              Build bin/forgejo-forge-gui (PyInstaller)"
 	@echo ""
 	@echo "  ── Install ─────────────────────────────────────────────"
-	@echo "  install            Symlink forgejo-forge → ~/.local/bin/"
-	@echo "  install-installer  Symlink forgejo-main  → ~/.local/bin/"
-	@echo "  install-gui        Symlink forgejo-forge-gui + .desktop entry"
-	@echo "  uninstall          Remove all symlinks + desktop entry"
+	@echo "  install                Symlink forgejo-forge → ~/.local/bin/"
+	@echo "  install-installer      Symlink forgejo-main  → ~/.local/bin/"
+	@echo "  install-gui            Symlink forgejo-forge-gui + .desktop entry"
+	@echo "  uninstall              Remove all symlinks + desktop entry"
 	@echo ""
 	@echo "  ── Other ───────────────────────────────────────────────"
-	@echo "  all                build + installer + gui-build"
-	@echo "  check              go vet (main + installer)"
-	@echo "  clean              Remove bin/, go.sum, venv, build artifacts"
-	@echo "  help               Show this message"
+	@echo "  all                    build + installer + gui-build"
+	@echo "  check                  go vet (main + installer)"
+	@echo "  clean                  Remove bin/, go.sum, venv, build artifacts"
+	@echo "  help                   Show this message"
 	@echo ""

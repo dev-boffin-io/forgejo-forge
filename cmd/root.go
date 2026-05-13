@@ -9,22 +9,19 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "forgejo-forge",
-	Short: "Forgejo setup and management tool for systemd and proot environments",
-	Long: `forgejo-forge automates Forgejo installation, configuration, and lifecycle
-management for both production (systemd) and proot/Termux environments.
-
-Commands:
-  setup        Install and configure Forgejo
-  start        Start a configured Forgejo instance
-  stop         Stop a running Forgejo instance
-  restart      Restart Forgejo
-  status       Show Forgejo status and access URLs
-  logs         Follow Forgejo logs
-  email-setup  Configure SMTP mailer in app.ini
-  uninstall    Remove Forgejo config, data, and service files`,
+	Short: "Forgejo setup and management tool for Linux (systemd/proot) and Windows",
+	Long: `forgejo-forge is a self-contained CLI for installing, configuring, and
+management for Linux (systemd & proot/Termux) and Windows environments.`,
 }
 
 func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func init() {
 	rootCmd.AddCommand(
 		setupCmd,
 		startCmd,
@@ -35,9 +32,4 @@ func Execute() {
 		emailCmd,
 		uninstallCmd,
 	)
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 
 	"github.com/dev-boffin-io/forgejo-forge/internal/admin"
 	"github.com/dev-boffin-io/forgejo-forge/internal/config"
@@ -26,7 +27,7 @@ var (
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "Install and configure Forgejo (auto-detects systemd or proot)",
+	Short: "Install and configure Forgejo (auto-detects systemd, proot, or Windows)",
 	RunE:  runSetup,
 }
 
@@ -45,11 +46,11 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 		flagEmail = admin.DefaultEmail(flagUsername)
 	}
 
-	giteaBin := detect.ForgejoBin()
-	if giteaBin == "" {
-		return fmt.Errorf("❌ gitea not found in PATH")
+	forgejoBin := detect.ForgejoBin()
+	if forgejoBin == "" {
+		return fmt.Errorf("❌ forge binary not found in PATH — run: forgejo-main install")
 	}
-	fmt.Printf("✔ Using binary: %s\n", giteaBin)
+	fmt.Printf("✔ Using binary: %s\n", forgejoBin)
 
 	mode := detect.Env()
 	fmt.Printf("▶ Detected mode: %s\n", mode)
@@ -66,62 +67,64 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 
 	switch mode {
 	case detect.ModeSystemd:
-		return setupSystemd(giteaBin)
+		return setupSystemd(forgejoBin)
+	case detect.ModeWindows:
+		return setupWindows(forgejoBin)
 	default:
-		return setupProot(giteaBin)
+		return setupProot(forgejoBin)
 	}
 }
 
-// ── Systemd ──────────────────────────────────────────────────────────────────
+// ── Systemd ───────────────────────────────────────────────────────────────────
 
-func setupSystemd(giteaBin string) error {
+func setupSystemd(forgejoBin string) error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("❌ systemd mode requires root (sudo forgejo-forge setup ...)")
 	}
 
 	const (
-		giteaUser = "git"
-		giteaHome = "/var/lib/forgejo"
-		giteaConf = "/etc/forgejo"
+		forgejoUser = "git"
+		forgejoHome = "/var/lib/forgejo"
+		forgejoConf = "/etc/forgejo"
 	)
 
 	paths, _ := svc.Resolve(detect.ModeSystemd)
 
 	fmt.Println("▶ Setting up production (systemd)...")
 
-	if err := ensureSystemUser(giteaUser, giteaHome); err != nil {
+	if err := ensureSystemUser(forgejoUser, forgejoHome); err != nil {
 		return err
 	}
 
 	dirs := []string{
-		filepath.Join(giteaHome, "data", "log"),
-		filepath.Join(giteaHome, "data", "lfs"),
-		filepath.Join(giteaHome, "repositories"),
-		giteaConf,
+		filepath.Join(forgejoHome, "data", "log"),
+		filepath.Join(forgejoHome, "data", "lfs"),
+		filepath.Join(forgejoHome, "repositories"),
+		forgejoConf,
 	}
 	if err := mkdirs(dirs, 0o750); err != nil {
 		return err
 	}
-	if err := chownR(giteaHome, giteaUser); err != nil {
+	if err := chownR(forgejoHome, forgejoUser); err != nil {
 		return err
 	}
 
 	rootURL := buildRootURL(flagDomain, flagPort)
 
 	written, err := config.WriteSystemd(paths.IniPath, config.SystemdParams{
-		RunUser:  giteaUser,
-		WorkPath: giteaHome,
-		DBPath:   filepath.Join(giteaHome, "data", "forgejo.db"),
-		RepoRoot: filepath.Join(giteaHome, "repositories"),
+		RunUser:  forgejoUser,
+		WorkPath: forgejoHome,
+		DBPath:   filepath.Join(forgejoHome, "data", "forgejo.db"),
+		RepoRoot: filepath.Join(forgejoHome, "repositories"),
 		Port:     flagPort,
 		RootURL:  rootURL,
-		LogPath:  filepath.Join(giteaHome, "data", "log"),
+		LogPath:  filepath.Join(forgejoHome, "data", "log"),
 	})
 	if err != nil {
 		return err
 	}
 	if written {
-		if err := chown(paths.IniPath, giteaUser); err != nil {
+		if err := chown(paths.IniPath, forgejoUser); err != nil {
 			return err
 		}
 		fmt.Printf("✔ Config written: %s\n", paths.IniPath)
@@ -129,14 +132,14 @@ func setupSystemd(giteaBin string) error {
 		fmt.Printf("⚠ Config already exists, skipping overwrite: %s\n", paths.IniPath)
 	}
 
-	if err := writeSystemdUnit(giteaBin, paths.IniPath); err != nil {
+	if err := writeSystemdUnit(forgejoBin, paths.IniPath); err != nil {
 		return err
 	}
 
 	for _, args := range [][]string{
 		{"daemon-reload"},
-		{"enable", "gitea"},
-		{"restart", "gitea"},
+		{"enable", "forgejo"},
+		{"restart", "forgejo"},
 	} {
 		if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil {
 			return fmt.Errorf("systemctl %v: %w\n%s", args, err, out)
@@ -147,12 +150,12 @@ func setupSystemd(giteaBin string) error {
 		return err
 	}
 	if err := admin.CreateUser(admin.CreateOptions{
-		ForgejoBin: giteaBin,
-		IniPath:  paths.IniPath,
-		WorkDir:  "/var/lib/forgejo",
-		Username: flagUsername,
-		Password: flagPassword,
-		Email:    flagEmail,
+		ForgejoBin: forgejoBin,
+		IniPath:    paths.IniPath,
+		WorkDir:    "/var/lib/forgejo",
+		Username:   flagUsername,
+		Password:   flagPassword,
+		Email:      flagEmail,
 	}); err != nil {
 		return err
 	}
@@ -161,7 +164,7 @@ func setupSystemd(giteaBin string) error {
 	return nil
 }
 
-func writeSystemdUnit(giteaBin, iniPath string) error {
+func writeSystemdUnit(forgejoBin, iniPath string) error {
 	const unitPath = "/etc/systemd/system/forgejo.service"
 	content := fmt.Sprintf(`[Unit]
 Description=Forgejo
@@ -175,7 +178,7 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-`, giteaBin, iniPath)
+`, forgejoBin, iniPath)
 
 	if err := os.WriteFile(unitPath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("write systemd unit: %w", err)
@@ -184,9 +187,9 @@ WantedBy=multi-user.target
 	return nil
 }
 
-// ── Proot ────────────────────────────────────────────────────────────────────
+// ── Proot ─────────────────────────────────────────────────────────────────────
 
-func setupProot(giteaBin string) error {
+func setupProot(forgejoBin string) error {
 	currentUser, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("get current user: %w", err)
@@ -230,8 +233,7 @@ func setupProot(giteaBin string) error {
 	}
 
 	runner.KillExisting()
-
-	pid, err := runner.StartBackground(giteaBin, paths.IniPath, paths.LogFile, paths.BaseDir)
+	pid, err := runner.StartBackground(forgejoBin, paths.IniPath, paths.LogFile, paths.BaseDir)
 	if err != nil {
 		return err
 	}
@@ -241,17 +243,92 @@ func setupProot(giteaBin string) error {
 		return err
 	}
 	if err := admin.CreateUser(admin.CreateOptions{
-		ForgejoBin: giteaBin,
-		IniPath:  paths.IniPath,
-		WorkDir:  paths.BaseDir,
-		Username: flagUsername,
-		Password: flagPassword,
-		Email:    flagEmail,
+		ForgejoBin: forgejoBin,
+		IniPath:    paths.IniPath,
+		WorkDir:    paths.BaseDir,
+		Username:   flagUsername,
+		Password:   flagPassword,
+		Email:      flagEmail,
 	}); err != nil {
 		return err
 	}
 
 	printSummary("proot", flagPort, flagUsername, flagPassword, paths.LogFile)
+	return nil
+}
+
+// ── Windows ───────────────────────────────────────────────────────────────────
+
+func setupWindows(forgejoBin string) error {
+	_ = runtime.GOOS
+
+	paths, err := svc.Resolve(detect.ModeWindows)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("▶ Setting up Windows mode...")
+	fmt.Printf("   Data directory: %s\n", paths.BaseDir)
+
+	currentUser, err := user.Current()
+	if err != nil {
+		return fmt.Errorf("get current user: %w", err)
+	}
+
+	dirs := []string{
+		filepath.Join(paths.BaseDir, "data", "log"),
+		filepath.Join(paths.BaseDir, "data", "lfs"),
+		filepath.Join(paths.BaseDir, "repositories"),
+		filepath.Dir(paths.IniPath),
+	}
+	if err := mkdirs(dirs, 0o750); err != nil {
+		return err
+	}
+
+	rootURL := buildRootURL(flagDomain, flagPort)
+
+	written, err := config.WriteProot(paths.IniPath, config.ProotParams{
+		RunUser:  currentUser.Username,
+		WorkPath: paths.BaseDir,
+		DBPath:   filepath.Join(paths.BaseDir, "data", "forgejo.db"),
+		RepoRoot: filepath.Join(paths.BaseDir, "repositories"),
+		Port:     flagPort,
+		RootURL:  rootURL,
+		LogPath:  filepath.Join(paths.BaseDir, "data", "log"),
+	})
+	if err != nil {
+		return err
+	}
+	if written {
+		fmt.Printf("✔ Config written: %s\n", paths.IniPath)
+	} else {
+		fmt.Printf("⚠ Config already exists, skipping overwrite: %s\n", paths.IniPath)
+	}
+
+	// Kill any existing process before starting fresh
+	runner.KillExisting(paths.PIDFile)
+
+	pid, err := runner.StartBackground(forgejoBin, paths.IniPath, paths.LogFile, paths.BaseDir, paths.PIDFile)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("✔ Forgejo started (PID %d)\n", pid)
+
+	if err := netutil.WaitForPort(flagPort, 30); err != nil {
+		return err
+	}
+	if err := admin.CreateUser(admin.CreateOptions{
+		ForgejoBin: forgejoBin,
+		IniPath:    paths.IniPath,
+		WorkDir:    paths.BaseDir,
+		Username:   flagUsername,
+		Password:   flagPassword,
+		Email:      flagEmail,
+	}); err != nil {
+		return err
+	}
+
+	printSummary("windows", flagPort, flagUsername, flagPassword, paths.LogFile)
 	return nil
 }
 
@@ -271,9 +348,13 @@ func printSummary(mode string, port int, username, password, logFile string) {
 	if logFile != "" {
 		fmt.Printf("📄 Log:  %s\n", logFile)
 	}
-	if mode == "systemd" {
+	switch mode {
+	case "systemd":
 		fmt.Println("🛑 Stop: sudo forgejo-forge stop")
-	} else {
+	case "windows":
+		fmt.Println("🛑 Stop: forgejo-forge stop")
+		fmt.Println("💡 Tip:  Add forgejo-forge to startup via Task Scheduler for auto-start")
+	default:
 		fmt.Println("🛑 Stop: forgejo-forge stop")
 	}
 }
@@ -287,7 +368,11 @@ func mkdirs(paths []string, perm os.FileMode) error {
 	return nil
 }
 
+// chownR and chown are Linux-only helpers; they are no-ops on Windows.
 func chownR(path, username string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	out, err := exec.Command("chown", "-R", username+":"+username, path).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("chown -R %s: %w\n%s", path, err, out)
@@ -296,6 +381,9 @@ func chownR(path, username string) error {
 }
 
 func chown(path, username string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	out, err := exec.Command("chown", username+":"+username, path).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("chown %s: %w\n%s", path, err, out)

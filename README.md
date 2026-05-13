@@ -2,78 +2,131 @@
 
 > Part of the [Forge Suite](https://github.com/dev-boffin-io) by [@dev-boffin-io](https://github.com/dev-boffin-io)
 
-A self-contained Forgejo management suite for Linux — supports both production
-(systemd) and proot/Termux (ARM64) environments.
+A self-contained Git forge management suite — supports **Linux** (systemd & proot/Termux) and **Windows** (amd64 & arm64).
+
+---
+
+## Platform → Binary Mapping
+
+| Platform | Binary installed | Source |
+|---|---|---|
+| Linux (systemd / proot / Termux) | **Forgejo** | codeberg.org/forgejo/forgejo |
+| Windows 10/11 (amd64, arm64) | **Gitea** | dl.gitea.com / github.com/go-gitea/gitea |
+
+> **Why Gitea on Windows?**
+> Forgejo dropped Windows support in 2024. Gitea is Forgejo's upstream project, shares the same config format (`app.ini`), CLI flags, and admin commands — so `forgejo-forge` works identically on both.
 
 ---
 
 ## Binaries
 
 | Binary | Description |
-|--------|-------------|
+|---|---|
 | `forgejo-forge` | CLI — setup, start, stop, restart, status, logs, email-setup, uninstall |
-| `forgejo-main` | Installer — install, update, upgrade, uninstall Forgejo binary |
+| `forgejo-main` | Installer — downloads Forgejo (Linux) or Gitea (Windows) |
 | `forgejo-forge-gui` | PyQt6 GUI frontend for `forgejo-forge` |
 
 ---
 
-## Requirements
+## Data Paths
 
-- Linux (Debian/Ubuntu, or proot/Termux ARM64)
-- `forgejo` binary in `PATH` (install with `forgejo-main`)
-- Python 3.10+ and `python3-venv` (GUI build only)
+| Mode | Config | Data |
+|---|---|---|
+| systemd (Linux) | `/etc/forgejo/app.ini` | `/var/lib/forgejo/` |
+| proot (Termux/ARM) | `~/forge-storage/forgejo/custom/conf/app.ini` | `~/forge-storage/forgejo/` |
+| **Windows** | `%APPDATA%\forgejo-forge\custom\conf\app.ini` | `%APPDATA%\forgejo-forge\` |
 
 ---
 
-## Quick Start
+## Quick Start — Windows
+
+```powershell
+# 1. Install Gitea binary
+#    Downloads from dl.gitea.com → %LOCALAPPDATA%\Programs\gitea\gitea.exe
+forgejo-main install
+
+# 2. Add the printed directory to PATH, then restart your terminal
+
+# 3. Verify
+gitea --version
+
+# 4. Setup
+forgejo-forge setup --username admin --password yourpassword
+
+# 5. Open browser → http://localhost:3000
+
+# 6. Stop
+forgejo-forge stop
+
+# 7. Status
+forgejo-forge status
+
+# 8. Email (optional)
+forgejo-forge email-setup `
+  --from   git@yourdomain.com `
+  --user   yourname@gmail.com `
+  --passwd "xxxx xxxx xxxx xxxx"
+```
+
+> **Auto-start on login:** Task Scheduler → New Task → Trigger: At log on → Action: `forgejo-forge start`
+
+---
+
+## Quick Start — Linux
 
 ```bash
 # 1. Install Forgejo binary
 forgejo-main install
 
-# 2. Setup Forgejo (proot / Termux)
+# 2. Setup (proot / Termux)
 forgejo-forge setup --username admin --password yourpassword
 
-# 3. Or with custom port and domain
-forgejo-forge setup --username admin --password yourpassword --port 3000 --domain git.local
+# 3. Production (systemd, requires sudo)
+sudo forgejo-forge setup --username admin --password yourpassword
 
-# 4. Check status
-forgejo-forge status
-
-# 5. Configure email (optional)
+# 4. Email
 forgejo-forge email-setup \
-  --from   forgejo@yourdomain.com \
+  --from   git@yourdomain.com \
   --user   yourname@gmail.com \
   --passwd "xxxx xxxx xxxx xxxx"
 
-# 6. Open GUI
+# 5. Open GUI
 forgejo-forge-gui
-```
-
-For systemd (production server):
-```bash
-sudo forgejo-forge setup --username admin --password yourpassword
 ```
 
 ---
 
-## forgejo-main — Forgejo Binary Installer
+## forgejo-main — Binary Installer
 
-Downloads and manages the official Forgejo binary from GitHub releases.
-Auto-detects architecture (amd64, arm64, riscv64).
+Auto-detects OS and downloads the correct binary.
 
-```bash
-forgejo-main install      # Download and install latest Forgejo
-forgejo-main update       # Check for updates
-forgejo-main upgrade      # Upgrade to latest version
-forgejo-main uninstall    # Remove Forgejo binary
+| OS | Binary | Download source |
+|---|---|---|
+| Linux amd64 | `forgejo` | codeberg.org |
+| Linux arm64 | `forgejo` | codeberg.org |
+| Linux arm | `forgejo` | codeberg.org |
+| **Windows amd64** | `gitea.exe` | dl.gitea.com |
+| **Windows arm64** | `gitea.exe` | dl.gitea.com |
+
+**Install locations:**
+
+| OS | Path |
+|---|---|
+| Linux | `/usr/local/bin/forgejo` |
+| Windows | `%LOCALAPPDATA%\Programs\gitea\gitea.exe` |
+
+```
+forgejo-main install      # Download and install latest binary
+forgejo-main update       # Check and upgrade to latest version
+forgejo-main upgrade      # Same as update
+forgejo-main uninstall    # Remove the binary
 ```
 
 ---
 
 ## forgejo-forge CLI
 
-```bash
+```
 forgejo-forge setup       [--username] [--password] [--email] [--port] [--domain]
 forgejo-forge start
 forgejo-forge stop
@@ -84,14 +137,15 @@ forgejo-forge email-setup [--from] [--user] [--passwd] [--smtp-addr] [--smtp-por
 forgejo-forge uninstall
 ```
 
-Auto-detects environment on every run:
-- **systemd mode** — requires `sudo`, uses `/etc/forgejo/` and `/var/lib/forgejo/`
-- **proot mode** — runs as current user, uses `~/forge-storage/forgejo/`
+Auto-detects mode on every run:
+- **systemd** — Linux with systemd; uses `/etc/forgejo/` and `/var/lib/forgejo/`
+- **proot** — Linux without systemd (Termux/ARM); uses `~/forge-storage/forgejo/`
+- **windows** — Windows; uses `%APPDATA%\forgejo-forge\`; process tracked via PID file
 
-### Setup flags
+### setup flags
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--username` | `admin` | Admin username |
 | `--password` | *(required)* | Admin password |
 | `--email` | `<username>@example.com` | Admin email |
@@ -100,94 +154,60 @@ Auto-detects environment on every run:
 
 ### email-setup flags
 
-Patches (or appends) the `[mailer]` section in the active `app.ini`.
-Run `forgejo-forge restart` after applying to activate the changes.
-
 | Flag | Default | Description |
-|------|---------|-------------|
-| `--from` | *(required)* | Sender address shown in outgoing mail |
-| `--user` | *(required)* | SMTP login username (usually your email) |
+|---|---|---|
+| `--from` | *(required)* | Sender address |
+| `--user` | *(required)* | SMTP login |
 | `--passwd` | *(required)* | SMTP password or App Password |
-| `--smtp-addr` | `smtp.gmail.com` | SMTP server hostname |
-| `--smtp-port` | `465` | SMTP port (465 for smtps, 587 for smtp/STARTTLS) |
-| `--protocol` | `smtps` | `smtps` (SSL/TLS) or `smtp` (STARTTLS) |
+| `--smtp-addr` | `smtp.gmail.com` | SMTP server |
+| `--smtp-port` | `465` | SMTP port |
+| `--protocol` | `smtps` | `smtps` or `smtp` (STARTTLS) |
 
-**Examples:**
+---
 
-```bash
-# Gmail with App Password (smtps / port 465)
-forgejo-forge email-setup \
-  --from   forgejo@yourdomain.com \
-  --user   yourname@gmail.com \
-  --passwd "xxxx xxxx xxxx xxxx" \
-  --smtp-addr smtp.gmail.com \
-  --smtp-port 465 --protocol smtps
+## Windows-specific Notes
 
-# Brevo / Mailgun STARTTLS (port 587)
-forgejo-forge email-setup \
-  --from   forgejo@yourdomain.com \
-  --user   apikey \
-  --passwd "your-api-key" \
-  --smtp-addr smtp-relay.brevo.com \
-  --smtp-port 587 --protocol smtp
+### Process management
+Forgejo-forge tracks Gitea via `%APPDATA%\forgejo-forge\forgejo.pid`.
+`stop`/`restart` use this PID; if missing, falls back to `taskkill /IM gitea.exe`.
+
+### Logs
+Pure-Go log reader (no `tail` needed). Follow mode polls every 500ms.
+
+### Firewall
+Windows Firewall may prompt to allow Gitea network access on first start — allow it.
+
+### Auto-start (Task Scheduler)
+```powershell
+# Run as Administrator once:
+$action  = New-ScheduledTaskAction -Execute "forgejo-forge.exe" -Argument "start"
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+Register-ScheduledTask -TaskName "ForgejoForge" -Action $action -Trigger $trigger -RunLevel Highest
 ```
-
-> **Gmail tip:** Enable 2FA on your Google account, then generate an App Password at
-> [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
-> Free alternatives: [Brevo](https://www.brevo.com), Mailgun, Cloudflare Email Routing.
-
-After setting up email, test it from the Forgejo Admin Panel:
-**Site Administration → Configuration → SMTP Mailer Configuration → Send Test Mail**
-
-### Data paths
-
-| Mode | Config | Data |
-|------|--------|------|
-| systemd | `/etc/forgejo/app.ini` | `/var/lib/forgejo/` |
-| proot | `~/forge-storage/forgejo/custom/conf/app.ini` | `~/forge-storage/forgejo/` |
-
-### Package registries
-
-All Forgejo package registries are enabled by default:
-
-| Type | Endpoint |
-|------|----------|
-| Go modules | `http://localhost:3000/api/packages/{user}/go` |
-| Debian/APT | `http://localhost:3000/api/packages/{user}/debian/...` |
-| Generic | `http://localhost:3000/api/packages/{user}/generic/...` |
-| Docker/OCI | `localhost:3000/{user}/{image}` |
 
 ---
 
 ## Build
 
+### Linux (native)
 ```bash
-# Dependencies
 sudo apt install golang python3-venv
-
-# Build everything
 make all
+make install && make install-installer
+```
 
-# Individual targets
-make build              # bin/forgejo-forge  (native)
-make build-arm64        # bin/forgejo-forge-arm64
-make installer          # bin/forgejo-main   (native)
-make installer-arm64    # bin/forgejo-main-arm64
-make gui-build          # bin/forgejo-forge-gui (PyInstaller)
+### Cross-compile Windows from Linux
+```bash
+make build-windows          # bin/forgejo-forge-windows-amd64.exe
+make build-windows-arm64    # bin/forgejo-forge-windows-arm64.exe
+make installer-windows      # bin/forgejo-main-windows-amd64.exe
+make installer-windows-arm64 # bin/forgejo-main-windows-arm64.exe
+```
 
-# Install to ~/.local/bin/
-make install
-make install-installer
-make install-gui        # + .desktop entry
-
-# Uninstall
-make uninstall
-
-# Clean
-make clean
-
-# Help
-make help
+### Windows native (requires Go)
+```powershell
+go build -o bin\forgejo-forge.exe .
+cd forgejo-installer && go build -o ..\bin\forgejo-main.exe .
 ```
 
 ---
@@ -196,32 +216,22 @@ make help
 
 ```
 forgejo-forge/
-├── main.go                     # forgejo-forge CLI entry point
-├── cmd/                        # CLI subcommands
-│   ├── setup.go
-│   ├── start.go  stop.go  restart.go
-│   ├── status.go  logs.go  uninstall.go
-│   ├── email.go                # email-setup command
-│   └── root.go
+├── main.go
+├── cmd/                        # CLI subcommands (setup/start/stop/restart/status/logs/email/uninstall)
 ├── internal/
-│   ├── admin/      # forgejo admin user create wrapper
-│   ├── config/     # app.ini writer, reader, mailer patcher
-│   ├── detect/     # systemd vs proot detection
-│   ├── netutil/    # port detection, LAN IP, cloudflared URL
-│   ├── runner/     # background process management
-│   └── svc/        # status, paths, uninstall logic
-├── forgejo-installer/            # forgejo-main sub-project
-│   ├── main.go
-│   ├── cmd/
+│   ├── admin/create.go         # admin user create (Forgejo & Gitea compatible)
+│   ├── config/                 # app.ini writer, reader, mailer patcher
+│   ├── detect/env.go           # mode detection; ForgejoBin() → gitea.exe on Windows
+│   ├── netutil/                # port detection, LAN IP, cloudflared
+│   ├── runner/                 # process management (GITEA_WORK_DIR on Windows)
+│   └── svc/                    # paths, status, uninstall
+├── forgejo-installer/          # forgejo-main sub-project
 │   └── internal/
-│       ├── arch/       # architecture detection
-│       ├── download/   # GitHub release downloader
-│       ├── install/    # install/uninstall logic
-│       └── version/    # version fetching
-├── gui/
-│   ├── forgejo-forge.py          # PyQt6 GUI (tabs: Setup · Control · Email · Logs)
-│   ├── forgejo-forge.png         # App icon
-│   └── requirements.txt
+│       ├── arch/arch.go        # Linux→Forgejo, Windows→Gitea routing
+│       ├── download/           # dual-source downloader (Codeberg / dl.gitea.com)
+│       ├── install/            # install/uninstall binary
+│       └── version/            # version fetch (Codeberg API / GitHub API)
+├── gui/                        # PyQt6 GUI
 └── Makefile
 ```
 

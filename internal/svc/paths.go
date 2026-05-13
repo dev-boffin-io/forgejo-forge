@@ -1,6 +1,8 @@
 package svc
 
 import (
+	"fmt"
+	"os"
 	"os/user"
 	"path/filepath"
 
@@ -9,10 +11,11 @@ import (
 
 // Paths holds all filesystem paths for a given mode.
 type Paths struct {
-	IniPath    string
-	LogFile    string
-	BaseDir    string // proot only; empty for systemd
+	IniPath     string
+	LogFile     string
+	BaseDir     string // proot/windows only; empty for systemd
 	SystemdUnit string // systemd only
+	PIDFile     string // windows only
 }
 
 // Resolve returns the canonical Paths for the current environment mode.
@@ -24,16 +27,42 @@ func Resolve(mode detect.Mode) (Paths, error) {
 			LogFile:     "", // journalctl handles logs
 			SystemdUnit: "forgejo",
 		}, nil
+
+	case detect.ModeWindows:
+		return windowsPaths()
+
 	default: // proot
+		return prootPaths()
+	}
+}
+
+func prootPaths() (Paths, error) {
+	u, err := user.Current()
+	if err != nil {
+		return Paths{}, err
+	}
+	base := filepath.Join(u.HomeDir, "forge-storage", "forgejo")
+	return Paths{
+		IniPath: filepath.Join(base, "custom", "conf", "app.ini"),
+		LogFile: filepath.Join(base, "data", "log", "forgejo.log"),
+		BaseDir: base,
+	}, nil
+}
+
+func windowsPaths() (Paths, error) {
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
 		u, err := user.Current()
 		if err != nil {
-			return Paths{}, err
+			return Paths{}, fmt.Errorf("cannot determine APPDATA directory: %w", err)
 		}
-		base := filepath.Join(u.HomeDir, "forge-storage", "forgejo")
-		return Paths{
-			IniPath: filepath.Join(base, "custom", "conf", "app.ini"),
-			LogFile: filepath.Join(base, "data", "log", "forgejo.log"),
-			BaseDir: base,
-		}, nil
+		appData = u.HomeDir
 	}
+	base := filepath.Join(appData, "forgejo-forge")
+	return Paths{
+		IniPath: filepath.Join(base, "custom", "conf", "app.ini"),
+		LogFile: filepath.Join(base, "data", "log", "forgejo.log"),
+		BaseDir: base,
+		PIDFile: filepath.Join(base, "forgejo.pid"),
+	}, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
@@ -27,16 +28,17 @@ func Uninstall(mode detect.Mode) error {
 	switch mode {
 	case detect.ModeSystemd:
 		return uninstallSystemd(paths)
+	case detect.ModeWindows:
+		return uninstallWindows(paths)
 	default:
 		return uninstallProot(paths)
 	}
 }
 
 func uninstallSystemd(paths Paths) error {
-	// Stop and disable service
 	for _, args := range [][]string{
-		{"stop", "gitea"},
-		{"disable", "gitea"},
+		{"stop", "forgejo"},
+		{"disable", "forgejo"},
 	} {
 		out, err := exec.Command("systemctl", args...).CombinedOutput()
 		if err != nil {
@@ -44,7 +46,6 @@ func uninstallSystemd(paths Paths) error {
 		}
 	}
 
-	// Remove unit file
 	unitFile := "/etc/systemd/system/forgejo.service"
 	if err := os.Remove(unitFile); err != nil && !os.IsNotExist(err) {
 		fmt.Printf("⚠ remove %s: %v\n", unitFile, err)
@@ -52,27 +53,37 @@ func uninstallSystemd(paths Paths) error {
 		fmt.Printf("✔ Removed: %s\n", unitFile)
 	}
 
-	// Reload daemon
 	_ = exec.Command("systemctl", "daemon-reload").Run()
-
-	// Remove config dir
 	removeDir("/etc/forgejo")
-
-	// Remove data dir
 	removeDir("/var/lib/forgejo")
-
 	fmt.Println("✔ Forgejo uninstalled (systemd)")
 	return nil
 }
 
 func uninstallProot(paths Paths) error {
-	// Kill process
 	_ = exec.Command("pkill", "-f", "forgejo web").Run()
-
-	// Remove data tree
 	removeDir(paths.BaseDir)
-
 	fmt.Println("✔ Forgejo uninstalled (proot)")
+	return nil
+}
+
+func uninstallWindows(paths Paths) error {
+	if runtime.GOOS == "windows" {
+		// Try PID file first for clean shutdown
+		if paths.PIDFile != "" {
+			data, err := os.ReadFile(paths.PIDFile)
+			if err == nil {
+				pidStr := strings.TrimSpace(string(data))
+				_ = exec.Command("taskkill", "/F", "/PID", pidStr).Run()
+				_ = os.Remove(paths.PIDFile)
+			}
+		}
+		_ = exec.Command("taskkill", "/F", "/IM", "gitea.exe").Run()
+	} else {
+		_ = exec.Command("pkill", "-f", "forgejo web").Run()
+	}
+	removeDir(paths.BaseDir)
+	fmt.Println("✔ Forgejo uninstalled (Windows)")
 	return nil
 }
 

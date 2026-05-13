@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 
 	"github.com/dev-boffin-io/forgejo-forge/internal/config"
 	"github.com/dev-boffin-io/forgejo-forge/internal/detect"
@@ -23,9 +24,9 @@ func runRestart(_ *cobra.Command, _ []string) error {
 	mode := detect.Env()
 	fmt.Printf("▶ Mode: %s\n", mode)
 
-	giteaBin := detect.ForgejoBin()
-	if giteaBin == "" {
-		return fmt.Errorf("❌ gitea not found in PATH")
+	forgejoBin := detect.ForgejoBin()
+	if forgejoBin == "" {
+		return fmt.Errorf("❌ forge binary not found in PATH — run: forgejo-main install")
 	}
 
 	paths, err := svc.Resolve(mode)
@@ -41,15 +42,23 @@ func runRestart(_ *cobra.Command, _ []string) error {
 
 	switch mode {
 	case detect.ModeSystemd:
-		out, err := exec.Command("systemctl", "restart", "gitea").CombinedOutput()
+		out, err := exec.Command("systemctl", "restart", "forgejo").CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("systemctl restart gitea: %w\n%s", err, out)
+			return fmt.Errorf("systemctl restart forgejo: %w\n%s", err, out)
 		}
 		fmt.Println("✔ Forgejo restarted (systemd)")
 
-	default:
+	case detect.ModeWindows:
+		runner.KillExisting(paths.PIDFile)
+		pid, err := runner.StartBackground(forgejoBin, paths.IniPath, paths.LogFile, paths.BaseDir, paths.PIDFile)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("✔ Forgejo restarted (PID %d)\n", pid)
+
+	default: // proot
 		runner.KillExisting()
-		pid, err := runner.StartBackground(giteaBin, paths.IniPath, paths.LogFile, paths.BaseDir)
+		pid, err := runner.StartBackground(forgejoBin, paths.IniPath, paths.LogFile, paths.BaseDir)
 		if err != nil {
 			return err
 		}
@@ -58,7 +67,11 @@ func runRestart(_ *cobra.Command, _ []string) error {
 
 	if err := netutil.WaitForPort(port, 30); err != nil {
 		fmt.Fprintln(os.Stderr, "\n📄 Last log lines:")
-		_ = exec.Command("tail", "-n", "20", paths.LogFile).Run()
+		if runtime.GOOS == "windows" {
+			printLastLines(paths.LogFile, 20)
+		} else {
+			_ = exec.Command("tail", "-n", "20", paths.LogFile).Run()
+		}
 		return err
 	}
 
