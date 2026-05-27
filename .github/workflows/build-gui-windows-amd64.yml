@@ -34,14 +34,15 @@ jobs:
       - name: Build GUI
         run: |
           mkdir -p bin
+          $icon = "$PWD\gui\forgejo-forge.png"
           pyinstaller `
             --onefile `
             --name forgejo-forge-gui-windows-amd64 `
             --distpath bin `
             --workpath .build `
             --specpath .spec `
-            --add-data "gui/forgejo-forge.png;." `
-            --icon gui/forgejo-forge.png `
+            --add-data "$icon;." `
+            --icon "$icon" `
             --windowed `
             gui/forgejo-forge.py
         shell: pwsh
