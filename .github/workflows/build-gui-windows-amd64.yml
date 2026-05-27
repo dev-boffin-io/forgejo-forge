@@ -1,0 +1,62 @@
+name: Build GUI Windows AMD64
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build GUI Windows AMD64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet pyinstaller pyqt6
+          if (Test-Path gui/requirements.txt) {
+            python -m pip install --quiet -r gui/requirements.txt
+          }
+        shell: pwsh
+
+      - name: Build GUI
+        run: |
+          mkdir -p bin
+          pyinstaller `
+            --onefile `
+            --name forgejo-forge-gui-windows-amd64 `
+            --distpath bin `
+            --workpath .build `
+            --specpath .spec `
+            --add-data "gui/forgejo-forge.png;." `
+            --icon gui/forgejo-forge.png `
+            --windowed `
+            gui/forgejo-forge.py
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgejo-forge-gui-windows-amd64
+          path: bin/forgejo-forge-gui-windows-amd64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/forgejo-forge-gui-windows-amd64.exe
+          generate_release_notes: false
