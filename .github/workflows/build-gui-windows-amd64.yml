@@ -25,7 +25,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet pyinstaller pyqt6
+          python -m pip install --quiet pyinstaller pyqt6 pillow
           if (Test-Path gui/requirements.txt) {
             python -m pip install --quiet -r gui/requirements.txt
           }
