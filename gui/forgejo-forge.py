@@ -189,12 +189,13 @@ class CommandWorker(QThread):
     output_line = pyqtSignal(str)
     finished    = pyqtSignal(int)   # exit code
 
-    def __init__(self, args: list[str], parent=None):
+    def __init__(self, args: list[str], binary_override: str = "", parent=None):
         super().__init__(parent)
         self.args = args
+        self.binary_override = binary_override
 
     def run(self):
-        binary = find_binary()
+        binary = find_binary(self.binary_override)
         if not binary:
             self.output_line.emit("❌ forgejo-forge binary not found in PATH or ./bin/")
             self.finished.emit(1)
@@ -261,13 +262,14 @@ class LogFollowWorker(QThread):
     output_line = pyqtSignal(str)
     finished    = pyqtSignal(int)
 
-    def __init__(self, args: list[str], parent=None):
+    def __init__(self, args: list[str], binary_override: str = "", parent=None):
         super().__init__(parent)
         self.args = args
+        self.binary_override = binary_override
         self._proc = None
 
     def run(self):
-        binary = find_binary()
+        binary = find_binary(self.binary_override)
         if not binary:
             self.output_line.emit("❌ forgejo-forge binary not found")
             self.finished.emit(1)
@@ -390,16 +392,24 @@ class BinaryCheckWorker(QThread):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def find_binary() -> str | None:
+def find_binary(override: str = "") -> str | None:
     """Locate forgejo-forge binary.
 
-    Search order:
+    If *override* is given (set via the Binary tab's path field) that path
+    is returned directly after existence + executable checks — no further
+    search is done.
+
+    Auto-search order:
     1. PATH  (works after 'make install')
     2. Same directory as this executable  (frozen PyInstaller build:
        both forgejo-forge and forgejo-forge-gui live in bin/)
     3. ./bin/ relative to CWD  (running from source: python3 gui/forgejo-forge.py)
     4. ../bin/ relative to script location
     """
+    # 0. Manual override from Binary tab
+    if override and os.path.isfile(override) and os.access(override, os.X_OK):
+        return override
+
     # 1. PATH
     if path := shutil.which(BINARY_NAME):
         return path
@@ -537,7 +547,7 @@ class ForgejoForgeGUI(QMainWindow):
         title = QLabel(f"🦊  {APP_NAME}")
         title.setStyleSheet(f"font-size: 26px; font-weight: bold; color: {ACCENT};")
 
-        binary = find_binary() or "not found"
+        binary = find_binary(self._custom_forgejo_path) or "not found"
         sub = QLabel(f"binary: {binary}")
         sub.setStyleSheet(f"font-size: 18px; color: {FG_SUBTLE};")
 
@@ -1082,7 +1092,7 @@ class ForgejoForgeGUI(QMainWindow):
     # ── Binary check ─────────────────────────────────────────────────
 
     def _check_binary(self):
-        if not find_binary():
+        if not find_binary(self._custom_forgejo_path):
             self._console_write(
                 f"⚠  '{BINARY_NAME}' binary not found.\n"
                 f"   Run 'make build' first, or add bin/ to PATH.\n",
@@ -1128,7 +1138,7 @@ class ForgejoForgeGUI(QMainWindow):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        binary = find_binary()
+        binary = find_binary(self._custom_forgejo_path)
         if not binary:
             return
         self._console_write("$ forgejo-forge uninstall\n")
@@ -1160,7 +1170,7 @@ class ForgejoForgeGUI(QMainWindow):
         self.log_view.clear()
         self._log_buffer.clear()
 
-        self._log_worker = LogFollowWorker(args)
+        self._log_worker = LogFollowWorker(args, binary_override=self._custom_forgejo_path)
         self._log_worker.output_line.connect(self._log_buffer.append)
         self._log_worker.finished.connect(self._on_log_finished)
         self._log_worker.start()
@@ -1175,7 +1185,7 @@ class ForgejoForgeGUI(QMainWindow):
             return
 
         self._set_buttons_enabled(False)
-        self._worker = CommandWorker(args)
+        self._worker = CommandWorker(args, binary_override=self._custom_forgejo_path)
         self._worker.output_line.connect(self._console_write)
         self._worker.finished.connect(self._on_command_finished)
         self._worker.start()
@@ -1191,7 +1201,7 @@ class ForgejoForgeGUI(QMainWindow):
     # ── Status refresh ────────────────────────────────────────────────
 
     def _refresh_status(self):
-        binary = find_binary()
+        binary = find_binary(self._custom_forgejo_path)
         if not binary:
             self._set_status_unknown()
             return
