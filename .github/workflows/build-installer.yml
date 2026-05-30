@@ -1,0 +1,90 @@
+name: Build Installer
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build Installer (${{ matrix.name }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            goos: linux
+            goarch: amd64
+            output: forgejo-main-linux-amd64
+
+          - name: linux-arm64
+            goos: linux
+            goarch: arm64
+            output: forgejo-main-linux-arm64
+
+          - name: windows-amd64
+            goos: windows
+            goarch: amd64
+            output: forgejo-main-windows-amd64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: forgejo-installer/go.mod
+          cache: true
+          cache-dependency-path: forgejo-installer/go.sum
+
+      - name: Tidy installer module
+        working-directory: forgejo-installer
+        run: go mod tidy
+
+      - name: Build installer binary
+        working-directory: forgejo-installer
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p ../bin
+          go build \
+            -ldflags "-s -w" \
+            -o ../bin/${{ matrix.output }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgejo-installer-${{ matrix.name }}
+          path: bin/${{ matrix.output }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Release Installer Binaries
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: forgejo-installer-*
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: false

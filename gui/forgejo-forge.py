@@ -4,10 +4,13 @@ forgejo-forge GUI
 PyQt6 frontend for the forgejo-forge CLI binary.
 """
 
+import json
 import os
-import sys
+import re
 import shutil
 import subprocess
+import sys
+import urllib.request
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QGroupBox, QSpinBox,
@@ -36,6 +39,7 @@ RED        = "#f38ba8"
 YELLOW     = "#f9e2af"
 MAUVE      = "#cba6f7"
 TEAL       = "#94e2d5"
+PEACH      = "#fab387"
 
 STYLE = f"""
 QMainWindow, QWidget {{
@@ -106,6 +110,12 @@ QPushButton#btn_logs     {{ border-color: {TEAL}; color: {TEAL}; }}
 QPushButton#btn_logs:hover {{ background-color: {TEAL}; color: {BG_BASE}; }}
 QPushButton#btn_uninstall {{ border-color: {RED}; color: {RED}; }}
 QPushButton#btn_uninstall:hover {{ background-color: {RED}; color: {BG_BASE}; }}
+QPushButton#btn_bin_install {{ border-color: {GREEN}; color: {GREEN}; }}
+QPushButton#btn_bin_install:hover {{ background-color: {GREEN}; color: {BG_BASE}; }}
+QPushButton#btn_bin_update {{ border-color: {PEACH}; color: {PEACH}; }}
+QPushButton#btn_bin_update:hover {{ background-color: {PEACH}; color: {BG_BASE}; }}
+QPushButton#btn_bin_check {{ border-color: {TEAL}; color: {TEAL}; }}
+QPushButton#btn_bin_check:hover {{ background-color: {TEAL}; color: {BG_BASE}; }}
 QTextEdit {{
     background-color: {BG_MANTLE};
     border: 1px solid {BG_OVERLAY};
@@ -197,6 +207,42 @@ class CommandWorker(QThread):
             self.finished.emit(1)
 
 
+class InstallerWorker(QThread):
+    """Runs forgejo-main (the installer) in a background thread."""
+    output_line = pyqtSignal(str)
+    finished    = pyqtSignal(int)
+
+    def __init__(self, args: list[str], parent=None):
+        super().__init__(parent)
+        self.args = args
+
+    def run(self):
+        binary = find_installer_binary()
+        if not binary:
+            self.output_line.emit("❌ forgejo-main installer binary not found in PATH or ./bin/")
+            self.finished.emit(1)
+            return
+
+        cmd = [binary] + self.args
+        self.output_line.emit(f"$ {' '.join(cmd)}\n")
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            for line in proc.stdout:
+                self.output_line.emit(line.rstrip())
+            proc.wait()
+            self.finished.emit(proc.returncode)
+        except Exception as e:
+            self.output_line.emit(f"❌ {e}")
+            self.finished.emit(1)
+
+
 class LogFollowWorker(QThread):
     """Follows gitea logs (blocking tail -f or journalctl -f)."""
     output_line = pyqtSignal(str)
@@ -238,6 +284,97 @@ class LogFollowWorker(QThread):
             self._proc.terminate()
 
 
+class BinaryCheckWorker(QThread):
+    """Detects installed forgejo/gitea binary and fetches latest release version."""
+    result = pyqtSignal(dict)   # {binary, path, installed, latest, source, up_to_date}
+    error  = pyqtSignal(str)
+
+    SEMVER_RE = re.compile(r'\d+\.\d+\.\d+')
+    FORGEJO_API = "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/latest"
+    GITEA_API   = "https://api.github.com/repos/go-gitea/gitea/releases/latest"
+
+    def __init__(self, custom_path: str = "", parent=None):
+        super().__init__(parent)
+        self.custom_path = custom_path.strip()
+
+    def run(self):
+        # 1. Locate the binary
+        binary_path = ""
+        binary_name = ""
+
+        if self.custom_path and os.path.isfile(self.custom_path) and os.access(self.custom_path, os.X_OK):
+            binary_path = self.custom_path
+            base = os.path.basename(self.custom_path).lower().replace(".exe", "")
+            binary_name = "gitea" if "gitea" in base else "forgejo"
+        else:
+            for name in ("forgejo", "gitea"):
+                p = shutil.which(name)
+                if p:
+                    binary_path = p
+                    binary_name = name
+                    break
+
+        if not binary_path:
+            # Also scan common install locations
+            common = [
+                "/usr/local/bin/forgejo", "/usr/local/bin/gitea",
+                os.path.expanduser("~/.local/bin/forgejo"),
+                os.path.expanduser("~/.local/bin/gitea"),
+            ]
+            for candidate in common:
+                if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                    binary_path = candidate
+                    binary_name = "gitea" if "gitea" in candidate else "forgejo"
+                    break
+
+        if not binary_path:
+            self.error.emit("forgejo / gitea not found in PATH or common locations")
+            return
+
+        # 2. Get installed version
+        installed = "unknown"
+        try:
+            out = subprocess.run(
+                [binary_path, "--version"],
+                capture_output=True, text=True, timeout=5,
+            )
+            m = self.SEMVER_RE.search(out.stdout + out.stderr)
+            if m:
+                installed = m.group()
+        except Exception:
+            pass
+
+        # 3. Fetch latest release from upstream API
+        source = "gitea" if binary_name == "gitea" else "forgejo"
+        latest = self._fetch_latest(source)
+
+        up_to_date = (installed != "unknown" and installed == latest)
+
+        self.result.emit({
+            "binary":     binary_name,
+            "path":       binary_path,
+            "installed":  installed,
+            "latest":     latest,
+            "source":     source,
+            "up_to_date": up_to_date,
+        })
+
+    def _fetch_latest(self, source: str) -> str:
+        try:
+            url = self.GITEA_API if source == "gitea" else self.FORGEJO_API
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "forgejo-installer/1.0",
+                "Accept":     "application/json",
+            })
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+                tag = data.get("tag_name", "")
+                m = self.SEMVER_RE.search(tag)
+                return m.group() if m else "unknown"
+        except Exception as e:
+            return f"fetch failed ({e})"
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def find_binary() -> str | None:
@@ -255,8 +392,6 @@ def find_binary() -> str | None:
         return path
 
     # 2. Same dir as the running executable (frozen or not)
-    #    sys.executable points to the PyInstaller bundle when frozen,
-    #    or to the python interpreter otherwise.
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
     candidate = os.path.join(exe_dir, BINARY_NAME)
     if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
@@ -268,6 +403,45 @@ def find_binary() -> str | None:
         candidate = os.path.join(base, "bin", BINARY_NAME)
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
+
+    return None
+
+
+def find_installer_binary() -> str | None:
+    """Locate the forgejo-main installer binary.
+
+    Search order: PATH → same dir as exe → ./bin/ → ../bin/
+    Tries both 'forgejo-main' and 'forgejo-main-<arch>' variants.
+    """
+    import platform
+    arch = platform.machine().lower()
+    arch_suffix = "arm64" if arch in ("aarch64", "arm64") else "amd64"
+
+    candidates_names = [
+        "forgejo-main",
+        f"forgejo-main-linux-{arch_suffix}",
+        f"forgejo-main-{arch_suffix}",
+    ]
+
+    # 1. PATH
+    for name in candidates_names:
+        if path := shutil.which(name):
+            return path
+
+    # 2. Same dir as running executable
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    for name in candidates_names:
+        candidate = os.path.join(exe_dir, name)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+
+    # 3-4. bin/ relative to CWD / script location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    for base in [os.getcwd(), script_dir, os.path.join(script_dir, "..")]:
+        for name in candidates_names:
+            candidate = os.path.join(base, "bin", name)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
 
     return None
 
@@ -291,9 +465,11 @@ class ForgejoForgeGUI(QMainWindow):
 
         self._worker: CommandWorker | None = None
         self._log_worker: LogFollowWorker | None = None
+        self._bin_check_worker: BinaryCheckWorker | None = None
         self._log_buffer: list[str] = []
+        self._custom_forgejo_path: str = ""
 
-        # Drains _log_buffer → log_view every 100 ms (avoids per-line repaint freeze)
+        # Drains _log_buffer → log_view every 100 ms
         self._log_timer = QTimer(self)
         self._log_timer.setInterval(100)
         self._log_timer.timeout.connect(self._flush_log_buffer)
@@ -325,6 +501,7 @@ class ForgejoForgeGUI(QMainWindow):
         tabs.addTab(self._make_control_tab(), "▶  Control")
         tabs.addTab(self._make_email_tab(),   "📧  Email")
         tabs.addTab(self._make_logs_tab(),    "📄  Logs")
+        tabs.addTab(self._make_binary_tab(),  "🔧  Binary")
         root.addWidget(tabs, stretch=1)
 
         # Output console
@@ -572,7 +749,6 @@ class ForgejoForgeGUI(QMainWindow):
         return w
 
     def _mail_proto_changed(self, index: int):
-        """Auto-set the default port when the user changes the protocol."""
         self.inp_mail_port.setValue(465 if index == 0 else 587)
 
     def _run_email_setup(self):
@@ -630,6 +806,242 @@ class ForgejoForgeGUI(QMainWindow):
         self.log_view.setPlaceholderText("Logs will appear here...")
         lay.addWidget(self.log_view, stretch=1)
         return w
+
+    # ── Binary tab ────────────────────────────────────────────────────
+
+    def _make_binary_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(12)
+
+        # ── Info group ────────────────────────────────────────────────
+        grp_info = QGroupBox("Detected binary")
+        ig = QVBoxLayout(grp_info)
+        ig.setSpacing(8)
+
+        def info_row(label_text: str) -> tuple[QLabel, QLabel]:
+            row = QHBoxLayout()
+            lbl = QLabel(label_text)
+            lbl.setFixedWidth(110)
+            lbl.setStyleSheet(f"color: {FG_SUBTLE};")
+            val = QLabel("—")
+            val.setStyleSheet(f"color: {FG_TEXT}; font-weight: bold;")
+            val.setWordWrap(True)
+            row.addWidget(lbl)
+            row.addWidget(val, stretch=1)
+            ig.addLayout(row)
+            return lbl, val
+
+        _, self.lbl_bin_name      = info_row("Binary")
+        _, self.lbl_bin_path      = info_row("Path")
+        _, self.lbl_bin_installed = info_row("Installed")
+        _, self.lbl_bin_latest    = info_row("Latest")
+
+        # Detect button in header row
+        detect_row = QHBoxLayout()
+        self.btn_bin_detect = QPushButton("⟳  Auto Detect")
+        self.btn_bin_detect.setFixedHeight(44)
+        self.btn_bin_detect.clicked.connect(self._run_detect_binary)
+        detect_row.addStretch()
+        detect_row.addWidget(self.btn_bin_detect)
+        ig.addLayout(detect_row)
+
+        lay.addWidget(grp_info)
+
+        # ── Path group ────────────────────────────────────────────────
+        grp_path = QGroupBox("Path override")
+        pg = QVBoxLayout(grp_path)
+
+        path_row = QHBoxLayout()
+        self.inp_bin_path = QLineEdit()
+        self.inp_bin_path.setPlaceholderText("/usr/local/bin/forgejo  (leave empty for auto)")
+        path_row.addWidget(self.inp_bin_path, stretch=1)
+
+        btn_auto = QPushButton("Auto")
+        btn_auto.setFixedWidth(80)
+        btn_auto.setFixedHeight(44)
+        btn_auto.clicked.connect(self._bin_path_auto)
+        path_row.addWidget(btn_auto)
+
+        self.btn_bin_set_path = QPushButton("Set Path")
+        self.btn_bin_set_path.setFixedHeight(44)
+        self.btn_bin_set_path.clicked.connect(self._bin_path_set)
+        path_row.addWidget(self.btn_bin_set_path)
+
+        pg.addLayout(path_row)
+
+        note = QLabel(
+            "💡 'Auto' scans PATH + /usr/local/bin + ~/.local/bin\n"
+            "   'Set Path' uses whatever you type above for this session"
+        )
+        note.setStyleSheet(f"font-size: 15px; color: {FG_SUBTLE};")
+        pg.addWidget(note)
+
+        installer_path = find_installer_binary() or "not found"
+        inst_note = QLabel(f"Installer (forgejo-main): {installer_path}")
+        inst_note.setStyleSheet(f"font-size: 15px; color: {FG_SUBTLE};")
+        pg.addWidget(inst_note)
+
+        lay.addWidget(grp_path)
+
+        # ── Actions group ─────────────────────────────────────────────
+        grp_act = QGroupBox("Actions")
+        ag = QHBoxLayout(grp_act)
+        ag.setSpacing(10)
+
+        self.btn_bin_install = QPushButton("⬇  Install")
+        self.btn_bin_install.setObjectName("btn_bin_install")
+        self.btn_bin_install.setFixedHeight(52)
+        self.btn_bin_install.clicked.connect(self._run_binary_install)
+
+        self.btn_bin_update = QPushButton("⬆  Update")
+        self.btn_bin_update.setObjectName("btn_bin_update")
+        self.btn_bin_update.setFixedHeight(52)
+        self.btn_bin_update.clicked.connect(self._run_binary_update)
+
+        self.btn_bin_check = QPushButton("⟳  Version Check")
+        self.btn_bin_check.setObjectName("btn_bin_check")
+        self.btn_bin_check.setFixedHeight(52)
+        self.btn_bin_check.clicked.connect(self._run_detect_binary)
+
+        ag.addWidget(self.btn_bin_install)
+        ag.addWidget(self.btn_bin_update)
+        ag.addStretch()
+        ag.addWidget(self.btn_bin_check)
+        lay.addWidget(grp_act)
+
+        lay.addStretch()
+
+        # Trigger auto-detect on first show
+        QTimer.singleShot(500, self._run_detect_binary)
+
+        return w
+
+    # ── Binary tab slots ──────────────────────────────────────────────
+
+    def _run_detect_binary(self):
+        """Spawn BinaryCheckWorker to detect installed binary + fetch latest."""
+        if self._bin_check_worker and self._bin_check_worker.isRunning():
+            return
+
+        self.lbl_bin_name.setText("⏳ detecting…")
+        self.lbl_bin_latest.setText("⏳ fetching…")
+        self.btn_bin_detect.setEnabled(False)
+        self.btn_bin_check.setEnabled(False)
+
+        self._bin_check_worker = BinaryCheckWorker(self._custom_forgejo_path)
+        self._bin_check_worker.result.connect(self._on_detect_result)
+        self._bin_check_worker.error.connect(self._on_detect_error)
+        self._bin_check_worker.finished.connect(
+            lambda: (
+                self.btn_bin_detect.setEnabled(True),
+                self.btn_bin_check.setEnabled(True),
+            )
+        )
+        self._bin_check_worker.start()
+
+    def _on_detect_result(self, data: dict):
+        self.lbl_bin_name.setText(data["binary"])
+        self.lbl_bin_path.setText(data["path"])
+
+        installed = data["installed"]
+        latest    = data["latest"]
+
+        if data.get("up_to_date"):
+            self.lbl_bin_installed.setText(f"{installed}  ✔ up to date")
+            self.lbl_bin_installed.setStyleSheet(f"color: {GREEN}; font-weight: bold;")
+        else:
+            self.lbl_bin_installed.setText(installed)
+            self.lbl_bin_installed.setStyleSheet(f"color: {FG_TEXT}; font-weight: bold;")
+
+        if "failed" in latest:
+            self.lbl_bin_latest.setText(latest)
+            self.lbl_bin_latest.setStyleSheet(f"color: {YELLOW}; font-weight: bold;")
+        elif installed != "unknown" and installed != latest:
+            self.lbl_bin_latest.setText(f"{latest}  ↑ update available")
+            self.lbl_bin_latest.setStyleSheet(f"color: {PEACH}; font-weight: bold;")
+        else:
+            self.lbl_bin_latest.setText(latest)
+            self.lbl_bin_latest.setStyleSheet(f"color: {FG_TEXT}; font-weight: bold;")
+
+        # Pre-fill path field if empty
+        if not self.inp_bin_path.text():
+            self.inp_bin_path.setText(data["path"])
+
+        self._console_write(
+            f"✔ Detected: {data['binary']} {installed}  (latest: {latest})",
+            color=GREEN,
+        )
+
+    def _on_detect_error(self, msg: str):
+        self.lbl_bin_name.setText("not found")
+        self.lbl_bin_name.setStyleSheet(f"color: {RED}; font-weight: bold;")
+        self.lbl_bin_path.setText("—")
+        self.lbl_bin_installed.setText("—")
+        self.lbl_bin_latest.setText("—")
+        self._console_write(f"⚠ {msg}", color=YELLOW)
+
+    def _bin_path_auto(self):
+        """Clear custom path override and re-detect."""
+        self._custom_forgejo_path = ""
+        self.inp_bin_path.clear()
+        self._run_detect_binary()
+
+    def _bin_path_set(self):
+        """Save manual path and refresh detection."""
+        path = self.inp_bin_path.text().strip()
+        if path and not (os.path.isfile(path) and os.access(path, os.X_OK)):
+            QMessageBox.warning(
+                self, "Invalid path",
+                f"'{path}' is not an executable file.\nCheck the path and try again.",
+            )
+            return
+        self._custom_forgejo_path = path
+        self._run_detect_binary()
+
+    def _run_binary_install(self):
+        """Run forgejo-main install."""
+        if not find_installer_binary():
+            QMessageBox.critical(
+                self, "Installer not found",
+                "forgejo-main binary not found.\n\nRun 'make installer' to build it first.",
+            )
+            return
+        self._run_installer_command(["install"])
+
+    def _run_binary_update(self):
+        """Run forgejo-main update."""
+        if not find_installer_binary():
+            QMessageBox.critical(
+                self, "Installer not found",
+                "forgejo-main binary not found.\n\nRun 'make installer' to build it first.",
+            )
+            return
+        self._run_installer_command(["update"])
+
+    def _run_installer_command(self, args: list[str]):
+        """Generic runner for forgejo-main sub-commands."""
+        if self._worker and self._worker.isRunning():
+            self._console_write("⚠ Another command is still running.", color=YELLOW)
+            return
+
+        self._set_buttons_enabled(False)
+        worker = InstallerWorker(args)
+        worker.output_line.connect(self._console_write)
+        worker.finished.connect(self._on_installer_finished)
+        # Keep a reference so GC doesn't collect the thread
+        self._worker = worker  # type: ignore[assignment]
+        self._worker.start()
+
+    def _on_installer_finished(self, code: int):
+        self._set_buttons_enabled(True)
+        if code == 0:
+            self._console_write(f"\n✔ Done (exit 0)", color=GREEN)
+            # Refresh binary info after install/update
+            QTimer.singleShot(800, self._run_detect_binary)
+        else:
+            self._console_write(f"\n✘ Failed (exit {code})", color=RED)
 
     # ── Console ───────────────────────────────────────────────────────
 
@@ -700,7 +1112,6 @@ class ForgejoForgeGUI(QMainWindow):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        # Pass 'y' to stdin confirmation prompt
         binary = find_binary()
         if not binary:
             return
@@ -720,10 +1131,9 @@ class ForgejoForgeGUI(QMainWindow):
 
     def _toggle_logs(self):
         if self._log_worker and self._log_worker.isRunning():
-            # Stop — do NOT call .wait() here; it blocks the main thread → freeze
             self._log_timer.stop()
             self._log_worker.stop()
-            self._log_worker = None          # thread finishes in background
+            self._log_worker = None
             self.btn_logs.setText("📄  Show Logs")
             return
 
@@ -735,7 +1145,6 @@ class ForgejoForgeGUI(QMainWindow):
         self._log_buffer.clear()
 
         self._log_worker = LogFollowWorker(args)
-        # Buffer lines — do NOT connect directly to append (causes per-line repaint)
         self._log_worker.output_line.connect(self._log_buffer.append)
         self._log_worker.finished.connect(self._on_log_finished)
         self._log_worker.start()
@@ -817,7 +1226,6 @@ class ForgejoForgeGUI(QMainWindow):
         self.console.moveCursor(QTextCursor.MoveOperation.End)
 
     def _flush_log_buffer(self):
-        """Drain _log_buffer into log_view in one batch — called every 100 ms."""
         if not self._log_buffer:
             return
 
@@ -829,24 +1237,21 @@ class ForgejoForgeGUI(QMainWindow):
 
         self.log_view.setUpdatesEnabled(False)
 
-        # Append all buffered lines in a single cursor operation
         cur.movePosition(QTextCursor.MoveOperation.End)
         cur.insertText("\n".join(lines) + "\n")
 
-        # Trim oldest lines if document exceeds MAX_LINES
         while doc.blockCount() > MAX_LINES + 1:
             trim = QTextCursor(doc.begin())
             trim.select(QTextCursor.SelectionType.BlockUnderCursor)
             trim.removeSelectedText()
-            trim.deleteChar()           # remove the trailing block separator
+            trim.deleteChar()
 
         self.log_view.setUpdatesEnabled(True)
         self.log_view.moveCursor(QTextCursor.MoveOperation.End)
 
     def _on_log_finished(self, _code: int):
-        """Called when LogFollowWorker exits (process ended or was stopped)."""
         self._log_timer.stop()
-        self._flush_log_buffer()        # drain any remaining lines
+        self._flush_log_buffer()
         self.btn_logs.setText("📄  Show Logs")
 
     def _append_log(self, widget: QTextEdit, line: str):
@@ -856,7 +1261,8 @@ class ForgejoForgeGUI(QMainWindow):
 
     def _set_buttons_enabled(self, enabled: bool):
         for name in ("btn_setup", "btn_start", "btn_stop", "btn_restart",
-                     "btn_uninstall", "btn_email_apply"):
+                     "btn_uninstall", "btn_email_apply",
+                     "btn_bin_install", "btn_bin_update"):
             if hasattr(self, name):
                 getattr(self, name).setEnabled(enabled)
 
@@ -866,10 +1272,12 @@ class ForgejoForgeGUI(QMainWindow):
         self._log_timer.stop()
         if self._log_worker and self._log_worker.isRunning():
             self._log_worker.stop()
-            self._log_worker.wait(2000)   # max 2 s — don't block forever
+            self._log_worker.wait(2000)
         if self._worker and self._worker.isRunning():
             self._worker.terminate()
             self._worker.wait(2000)
+        if self._bin_check_worker and self._bin_check_worker.isRunning():
+            self._bin_check_worker.wait(2000)
         event.accept()
 
 
@@ -879,7 +1287,6 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
 
-    # HiDPI
     if hasattr(Qt.ApplicationAttribute, "AA_UseHighDpiPixmaps"):
         app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
 
