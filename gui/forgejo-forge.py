@@ -19,6 +19,19 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QProcess
 from PyQt6.QtGui import QFont, QColor, QPalette, QTextCursor
 
+# ── ANSI strip ────────────────────────────────────────────────────────────────
+
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[mABCDEFGHJKSTfhilmnqrsu]')
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI terminal escape sequences from text.
+
+    forgejo-main (installer) emits coloured output via ANSI codes which
+    look like garbage inside a Qt widget.  Strip them before display.
+    """
+    return _ANSI_RE.sub('', text)
+
+
 # ── Constants ────────────────────────────────────────────────────────────────
 
 APP_NAME    = "forgejo-forge"
@@ -235,7 +248,7 @@ class InstallerWorker(QThread):
                 bufsize=1,
             )
             for line in proc.stdout:
-                self.output_line.emit(line.rstrip())
+                self.output_line.emit(strip_ansi(line.rstrip()))
             proc.wait()
             self.finished.emit(proc.returncode)
         except Exception as e:
@@ -411,16 +424,19 @@ def find_installer_binary() -> str | None:
     """Locate the forgejo-main installer binary.
 
     Search order: PATH → same dir as exe → ./bin/ → ../bin/
-    Tries both 'forgejo-main' and 'forgejo-main-<arch>' variants.
+    Tries both 'forgejo-main' and platform-specific suffixed variants.
     """
     import platform
-    arch = platform.machine().lower()
-    arch_suffix = "arm64" if arch in ("aarch64", "arm64") else "amd64"
+    machine = platform.machine().lower()
+    arch_suffix = "arm64" if machine in ("aarch64", "arm64") else "amd64"
+    is_win = sys.platform == "win32"
+    os_tag  = "windows" if is_win else "linux"
+    exe_ext = ".exe" if is_win else ""
 
     candidates_names = [
-        "forgejo-main",
-        f"forgejo-main-linux-{arch_suffix}",
-        f"forgejo-main-{arch_suffix}",
+        f"forgejo-main{exe_ext}",
+        f"forgejo-main-{os_tag}-{arch_suffix}{exe_ext}",
+        f"forgejo-main-{arch_suffix}{exe_ext}",
     ]
 
     # 1. PATH
