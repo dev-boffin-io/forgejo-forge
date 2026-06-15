@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QGroupBox, QSpinBox,
     QTabWidget, QFrame, QSizePolicy, QMessageBox, QCheckBox, QComboBox,
+    QScrollArea,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QProcess
 from PyQt6.QtGui import QFont, QColor, QPalette, QTextCursor
@@ -59,7 +60,7 @@ QMainWindow, QWidget {{
     background-color: {BG_BASE};
     color: {FG_TEXT};
     font-family: 'JetBrains Mono', 'Fira Code', 'Monospace';
-    font-size: 20px;
+    font-size: 26px;
 }}
 QGroupBox {{
     border: 1px solid {BG_OVERLAY};
@@ -68,7 +69,7 @@ QGroupBox {{
     padding-top: 12px;
     color: {ACCENT};
     font-weight: bold;
-    font-size: 18px;
+    font-size: 24px;
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
@@ -136,7 +137,7 @@ QTextEdit {{
     padding: 6px;
     color: {FG_TEXT};
     font-family: 'JetBrains Mono', 'Fira Code', 'Monospace';
-    font-size: 19px;
+    font-size: 24px;
 }}
 QTabWidget::pane {{
     border: 1px solid {BG_OVERLAY};
@@ -158,7 +159,7 @@ QTabBar::tab:selected {{
     border-color: {ACCENT};
 }}
 QLabel#status_label {{
-    font-size: 19px;
+    font-size: 24px;
     padding: 3px 8px;
     border-radius: 4px;
 }}
@@ -180,6 +181,18 @@ QCheckBox::indicator:checked {{
 QFrame#divider {{
     color: {BG_OVERLAY};
 }}
+QPushButton#btn_runner_install  {{ border-color: {GREEN};  color: {GREEN}; }}
+QPushButton#btn_runner_install:hover  {{ background-color: {GREEN};  color: {BG_BASE}; }}
+QPushButton#btn_runner_register {{ border-color: {MAUVE};  color: {MAUVE}; }}
+QPushButton#btn_runner_register:hover {{ background-color: {MAUVE};  color: {BG_BASE}; }}
+QPushButton#btn_runner_start    {{ border-color: {GREEN};  color: {GREEN}; }}
+QPushButton#btn_runner_start:hover    {{ background-color: {GREEN};  color: {BG_BASE}; }}
+QPushButton#btn_runner_stop     {{ border-color: {RED};    color: {RED}; }}
+QPushButton#btn_runner_stop:hover     {{ background-color: {RED};    color: {BG_BASE}; }}
+QPushButton#btn_runner_status   {{ border-color: {TEAL};   color: {TEAL}; }}
+QPushButton#btn_runner_status:hover   {{ background-color: {TEAL};   color: {BG_BASE}; }}
+QPushButton#btn_runner_uninstall {{ border-color: {RED};   color: {RED}; }}
+QPushButton#btn_runner_uninstall:hover {{ background-color: {RED};  color: {BG_BASE}; }}
 """
 
 # ── Worker thread ─────────────────────────────────────────────────────────────
@@ -474,8 +487,8 @@ def find_installer_binary() -> str | None:
 
 def screen_aware_size(app: QApplication) -> tuple[int, int]:
     screen = app.primaryScreen().availableGeometry()
-    w = min(1100, int(screen.width()  * 0.88))
-    h = min(800, int(screen.height() * 0.88))
+    w = min(1280, int(screen.width()  * 0.92))
+    h = min(820, int(screen.height() * 0.85))
     return w, h
 
 
@@ -487,6 +500,7 @@ class ForgejoForgeGUI(QMainWindow):
         w, h = screen_aware_size(app)
         self.setWindowTitle(f"{APP_NAME}  v{APP_VERSION}")
         self.resize(w, h)
+        self.setMinimumSize(900, 600)
         self.setStyleSheet(STYLE)
 
         self._worker: CommandWorker | None = None
@@ -494,6 +508,7 @@ class ForgejoForgeGUI(QMainWindow):
         self._bin_check_worker: BinaryCheckWorker | None = None
         self._log_buffer: list[str] = []
         self._custom_forgejo_path: str = ""
+        self._custom_runner_path: str = ""
 
         # Drains _log_buffer → log_view every 100 ms
         self._log_timer = QTimer(self)
@@ -526,6 +541,7 @@ class ForgejoForgeGUI(QMainWindow):
         tabs.addTab(self._make_setup_tab(),   "⚙  Setup")
         tabs.addTab(self._make_control_tab(), "▶  Control")
         tabs.addTab(self._make_email_tab(),   "📧  Email")
+        tabs.addTab(self._make_runner_tab(),  "🏃  Runner")
         tabs.addTab(self._make_logs_tab(),    "📄  Logs")
         tabs.addTab(self._make_binary_tab(),  "🔧  Binary")
         root.addWidget(tabs, stretch=1)
@@ -545,16 +561,29 @@ class ForgejoForgeGUI(QMainWindow):
         lay.setContentsMargins(0, 0, 0, 0)
 
         title = QLabel(f"🦊  {APP_NAME}")
-        title.setStyleSheet(f"font-size: 26px; font-weight: bold; color: {ACCENT};")
+        title.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {ACCENT};")
 
         binary = find_binary(self._custom_forgejo_path) or "not found"
         sub = QLabel(f"binary: {binary}")
-        sub.setStyleSheet(f"font-size: 18px; color: {FG_SUBTLE};")
+        sub.setStyleSheet(f"font-size: 22px; color: {FG_SUBTLE};")
 
         lay.addWidget(title)
         lay.addStretch()
         lay.addWidget(sub)
         return w
+
+    # ── Shared helper: wrap a tab's content widget in a vertical scroll area ──
+
+    def _wrap_scroll(self, w: QWidget) -> QScrollArea:
+        """Wrap a tab content widget in a QScrollArea so nothing is clipped
+        when the window is resized smaller than the content needs."""
+        scroll = QScrollArea()
+        scroll.setWidget(w)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background: transparent; }")
+        return scroll
 
     # ── Setup tab ─────────────────────────────────────────────────────
 
@@ -619,7 +648,7 @@ class ForgejoForgeGUI(QMainWindow):
         lay.addLayout(btn_row)
 
         lay.addStretch()
-        return w
+        return self._wrap_scroll(w)
 
     # ── Control tab ───────────────────────────────────────────────────
 
@@ -652,7 +681,7 @@ class ForgejoForgeGUI(QMainWindow):
         info = QGroupBox("Instance info")
         il = QVBoxLayout(info)
         self.info_text = QLabel("Run 'status' or wait for auto-refresh.")
-        self.info_text.setStyleSheet(f"color: {FG_SUBTLE}; font-size: 19px;")
+        self.info_text.setStyleSheet(f"color: {FG_SUBTLE}; font-size: 24px;")
         self.info_text.setWordWrap(True)
         il.addWidget(self.info_text)
 
@@ -673,7 +702,7 @@ class ForgejoForgeGUI(QMainWindow):
         lay.addWidget(danger)
 
         lay.addStretch()
-        return w
+        return self._wrap_scroll(w)
 
     # ── Email / Mailer tab ────────────────────────────────────────────
 
@@ -750,7 +779,7 @@ class ForgejoForgeGUI(QMainWindow):
             "💡 Gmail: enable 2FA → create an App Password at myaccount.google.com/apppasswords\n"
             "   Free alternatives: Brevo (brevo.com), Mailgun, Cloudflare Email Routing"
         )
-        note.setStyleSheet(f"font-size: 15px; color: {FG_SUBTLE};")
+        note.setStyleSheet(f"font-size: 20px; color: {FG_SUBTLE};")
         note.setWordWrap(True)
         lay.addWidget(note)
 
@@ -772,7 +801,7 @@ class ForgejoForgeGUI(QMainWindow):
         lay.addLayout(btn_row)
 
         lay.addStretch()
-        return w
+        return self._wrap_scroll(w)
 
     def _mail_proto_changed(self, index: int):
         self.inp_mail_port.setValue(465 if index == 0 else 587)
@@ -802,6 +831,307 @@ class ForgejoForgeGUI(QMainWindow):
         ])
 
     # ── Logs tab ──────────────────────────────────────────────────────
+
+    def _make_runner_tab(self) -> QWidget:
+        """Runner (forgejo-runner / act_runner) install, register, and control tab."""
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(12)
+
+        # ── Status row ────────────────────────────────────────────────
+        status_row = QHBoxLayout()
+        status_lbl = QLabel("Runner status:")
+        status_lbl.setStyleSheet(f"color: {FG_SUBTLE};")
+        self.lbl_runner_status = QLabel("● Unknown")
+        self.lbl_runner_status.setStyleSheet(
+            f"color: {FG_SUBTLE}; background: {BG_SURFACE}; font-weight: bold; "
+            f"padding: 3px 8px; border-radius: 4px;"
+        )
+        btn_runner_refresh = QPushButton("⟳ Refresh")
+        btn_runner_refresh.setFixedHeight(36)
+        btn_runner_refresh.clicked.connect(self._runner_refresh_status)
+        status_row.addWidget(status_lbl)
+        status_row.addWidget(self.lbl_runner_status)
+        status_row.addStretch()
+        status_row.addWidget(btn_runner_refresh)
+        lay.addLayout(status_row)
+
+        # ── Runner binary path override ───────────────────────────────
+        grp_path = QGroupBox("Runner Binary Path")
+        pg = QVBoxLayout(grp_path)
+        pg.setSpacing(6)
+
+        path_row = QHBoxLayout()
+        self.inp_runner_bin_path = QLineEdit()
+        self.inp_runner_bin_path.setPlaceholderText(
+            "/usr/local/bin/forgejo-runner   (leave empty = auto-detect from PATH)"
+        )
+        path_row.addWidget(self.inp_runner_bin_path, stretch=1)
+
+        btn_runner_auto = QPushButton("Auto")
+        btn_runner_auto.setFixedWidth(90)
+        btn_runner_auto.setFixedHeight(44)
+        btn_runner_auto.clicked.connect(self._runner_bin_path_auto)
+        path_row.addWidget(btn_runner_auto)
+
+        btn_runner_set = QPushButton("Set Path")
+        btn_runner_set.setFixedHeight(44)
+        btn_runner_set.clicked.connect(self._runner_bin_path_set)
+        path_row.addWidget(btn_runner_set)
+
+        pg.addLayout(path_row)
+
+        path_hint = QLabel(
+            "💡 'Auto' scans PATH → ~/.local/bin → /usr/local/bin for forgejo-runner / act_runner\n"
+            "   'Set Path' pins whatever you type above for this session"
+        )
+        path_hint.setStyleSheet(f"font-size: 20px; color: {FG_SUBTLE};")
+        pg.addWidget(path_hint)
+        lay.addWidget(grp_path)
+
+        # ── Install group ─────────────────────────────────────────────
+        grp_inst = QGroupBox("Install / Update Runner Binary")
+        ig = QVBoxLayout(grp_inst)
+        ig.setSpacing(8)
+
+        note_os = QLabel(
+            "Linux → forgejo-runner (code.forgejo.org)    |    Windows / macOS → gitea-runner (gitea.com)"
+        )
+        note_os.setStyleSheet(f"font-size: 20px; color: {FG_SUBTLE};")
+        ig.addWidget(note_os)
+
+        inst_row = QHBoxLayout()
+        self.btn_runner_install = QPushButton("⬇  Install Runner")
+        self.btn_runner_install.setObjectName("btn_runner_install")
+        self.btn_runner_install.setFixedHeight(48)
+        self.btn_runner_install.clicked.connect(self._runner_install)
+
+        self.btn_runner_uninstall = QPushButton("🗑  Uninstall Runner")
+        self.btn_runner_uninstall.setObjectName("btn_runner_uninstall")
+        self.btn_runner_uninstall.setFixedHeight(48)
+        self.btn_runner_uninstall.clicked.connect(self._runner_uninstall)
+
+        inst_row.addWidget(self.btn_runner_install)
+        inst_row.addStretch()
+        inst_row.addWidget(self.btn_runner_uninstall)
+        ig.addLayout(inst_row)
+        lay.addWidget(grp_inst)
+
+        # ── Register group ────────────────────────────────────────────
+        grp_reg = QGroupBox("Register Runner")
+        rg = QVBoxLayout(grp_reg)
+        rg.setSpacing(8)
+
+        def reg_row(label: str, placeholder: str, pw: bool = False):
+            row = QHBoxLayout()
+            lbl = QLabel(label)
+            lbl.setFixedWidth(115)
+            lbl.setStyleSheet(f"color: {FG_SUBTLE};")
+            inp = QLineEdit()
+            inp.setPlaceholderText(placeholder)
+            if pw:
+                inp.setEchoMode(QLineEdit.EchoMode.Password)
+            row.addWidget(lbl)
+            row.addWidget(inp, stretch=1)
+            rg.addLayout(row)
+            return inp
+
+        self.inp_runner_url    = reg_row("Instance URL", "http://localhost:3000")
+        self.inp_runner_token  = reg_row("Token", "Paste runner registration token here", pw=True)
+        self.inp_runner_uuid   = reg_row("UUID", "UUID shown on Forgejo's 'Set up runner' page")
+        self.inp_runner_name   = reg_row("Runner name", "my-runner  (leave blank for hostname)")
+        self.inp_runner_labels = reg_row("Labels", "ubuntu-latest:host")
+        self.inp_runner_labels.setText("ubuntu-latest:host")
+
+        uuid_hint = QLabel(
+            "💡 Copy the UUID + Token together from Forgejo: Settings → Actions → Runners → "
+            "Create new runner ('Set up runner' page)"
+        )
+        uuid_hint.setStyleSheet(f"font-size: 20px; color: {FG_SUBTLE};")
+        rg.addWidget(uuid_hint)
+
+        self.chk_runner_clean = QCheckBox("Clean register (discard previous config.yml + .runner state)")
+        rg.addWidget(self.chk_runner_clean)
+
+        self.btn_runner_register = QPushButton("🔗  Register Runner")
+        self.btn_runner_register.setObjectName("btn_runner_register")
+        self.btn_runner_register.setFixedHeight(48)
+        self.btn_runner_register.clicked.connect(self._runner_register)
+        rg.addWidget(self.btn_runner_register)
+
+        lay.addWidget(grp_reg)
+
+        # ── Control group ─────────────────────────────────────────────
+        grp_ctrl = QGroupBox("Runner Daemon Control")
+        cg = QHBoxLayout(grp_ctrl)
+        cg.setSpacing(10)
+
+        self.btn_runner_start = QPushButton("▶  Start")
+        self.btn_runner_start.setObjectName("btn_runner_start")
+        self.btn_runner_start.setFixedHeight(48)
+        self.btn_runner_start.clicked.connect(self._runner_start)
+
+        self.btn_runner_stop = QPushButton("⏹  Stop")
+        self.btn_runner_stop.setObjectName("btn_runner_stop")
+        self.btn_runner_stop.setFixedHeight(48)
+        self.btn_runner_stop.clicked.connect(self._runner_stop)
+
+        self.btn_runner_status_btn = QPushButton("ℹ  Status")
+        self.btn_runner_status_btn.setObjectName("btn_runner_status")
+        self.btn_runner_status_btn.setFixedHeight(48)
+        self.btn_runner_status_btn.clicked.connect(self._runner_status)
+
+        cg.addWidget(self.btn_runner_start)
+        cg.addWidget(self.btn_runner_stop)
+        cg.addStretch()
+        cg.addWidget(self.btn_runner_status_btn)
+        lay.addWidget(grp_ctrl)
+
+        lay.addStretch()
+
+        # Trigger status check on open
+        QTimer.singleShot(600, self._runner_refresh_status)
+
+        return self._wrap_scroll(w)
+
+    # ── Runner slots ──────────────────────────────────────────────────
+
+    def _runner_bin_path_auto(self):
+        """Clear custom runner path and re-detect."""
+        self._custom_runner_path = ""
+        self.inp_runner_bin_path.clear()
+        self._runner_refresh_status()
+
+    def _runner_bin_path_set(self):
+        """Pin manual runner binary path for this session."""
+        path = self.inp_runner_bin_path.text().strip()
+        if path and not (os.path.isfile(path) and os.access(path, os.X_OK)):
+            QMessageBox.warning(
+                self, "Invalid path",
+                f"'{path}' is not an executable file.\nCheck the path and try again.",
+            )
+            return
+        self._custom_runner_path = path
+        self._runner_refresh_status()
+
+    def _runner_run(self, args: list):
+        """Run forgejo-forge runner <args> via CommandWorker, respecting custom runner path."""
+        if self._worker and self._worker.isRunning():
+            self._console_write("⚠ Another command is still running.", color=YELLOW)
+            return
+        self._set_runner_buttons_enabled(False)
+        # Pass runner path via env override if set
+        full_args = ["runner"] + args
+        if self._custom_runner_path:
+            full_args = ["runner", "--runner-bin", self._custom_runner_path] + args
+        self._worker = CommandWorker(full_args,
+                                     binary_override=self._custom_forgejo_path)
+        self._worker.output_line.connect(self._console_write)
+        self._worker.finished.connect(self._on_runner_finished)
+        self._worker.start()
+
+    def _on_runner_finished(self, code: int):
+        self._set_runner_buttons_enabled(True)
+        if code == 0:
+            self._console_write("\n✔ Done (exit 0)", color=GREEN)
+        else:
+            self._console_write(f"\n✘ Failed (exit {code})", color=RED)
+        # Small delay so a just-stopped/started process has settled before
+        # we re-check its liveness (avoids a stale "Running"/"Stopped" badge).
+        QTimer.singleShot(300, self._runner_refresh_status)
+
+    def _set_runner_buttons_enabled(self, enabled: bool):
+        for name in ("btn_runner_install", "btn_runner_uninstall",
+                     "btn_runner_register", "btn_runner_start",
+                     "btn_runner_stop", "btn_runner_status_btn"):
+            if hasattr(self, name):
+                getattr(self, name).setEnabled(enabled)
+
+    def _runner_install(self):
+        self._runner_run(["install"])
+
+    def _runner_uninstall(self):
+        reply = QMessageBox.question(
+            self, "Confirm runner uninstall",
+            "Remove the runner binary, config, and PID file?\n\nAre you sure?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._runner_run(["uninstall"])
+
+    def _runner_register(self):
+        url = self.inp_runner_url.text().strip()
+        token = self.inp_runner_token.text().strip()
+        if not url or not token:
+            QMessageBox.warning(self, "Missing fields",
+                                "Instance URL and Token are both required.")
+            return
+        args = ["register", "--url", url, "--token", token]
+        uuid = self.inp_runner_uuid.text().strip()
+        if uuid:
+            args += ["--uuid", uuid]
+        name = self.inp_runner_name.text().strip()
+        if name:
+            args += ["--name", name]
+        labels = self.inp_runner_labels.text().strip()
+        if labels:
+            args += ["--labels", labels]
+        if self.chk_runner_clean.isChecked():
+            args += ["--clean"]
+        self._runner_run(args)
+
+    def _runner_start(self):
+        self._runner_run(["start"])
+
+    def _runner_stop(self):
+        self._runner_run(["stop"])
+
+    def _runner_status(self):
+        self._runner_run(["status"])
+
+    def _runner_refresh_status(self):
+        """Quick non-blocking status probe via forgejo-forge runner status."""
+        try:
+            binary = find_binary(self._custom_forgejo_path)
+            if not binary:
+                self._set_runner_status_label("● Binary missing", RED)
+                return
+            args = [binary, "runner", "status"]
+            if self._custom_runner_path:
+                args = [binary, "runner", "--runner-bin", self._custom_runner_path, "status"]
+            result = subprocess.run(args, capture_output=True, text=True, timeout=5)
+            out = (result.stdout + result.stderr).lower()
+            # Auto-fill path field from detected binary if empty
+            if not self.inp_runner_bin_path.text():
+                for line in (result.stdout + result.stderr).splitlines():
+                    if "runner binary" in line.lower() and ":" in line:
+                        detected = line.split(":", 1)[1].strip()
+                        if detected and detected != "not installed":
+                            self.inp_runner_bin_path.setText(detected)
+                        break
+            if "running" in out:
+                self._set_runner_status_label("● Running", GREEN)
+            elif "not installed" in out or "binary not found" in out:
+                self._set_runner_status_label("● Not installed", RED)
+            elif "stopped" in out:
+                self._set_runner_status_label("● Stopped", RED)
+                # Surface the log tail (printed by `runner status` when stopped)
+                # so crashes are visible without digging through files manually.
+                full_out = (result.stdout + result.stderr).strip()
+                if "log lines" in out:
+                    self._console_write("\n" + full_out, color=YELLOW)
+            else:
+                self._set_runner_status_label("● Unknown", FG_SUBTLE)
+        except Exception:
+            self._set_runner_status_label("● Unknown", FG_SUBTLE)
+
+    def _set_runner_status_label(self, text: str, color: str):
+        self.lbl_runner_status.setText(text)
+        self.lbl_runner_status.setStyleSheet(
+            f"color: {color}; background: {BG_SURFACE}; font-weight: bold; "
+            f"padding: 3px 8px; border-radius: 4px;"
+        )
 
     def _make_logs_tab(self) -> QWidget:
         w = QWidget()
@@ -901,12 +1231,12 @@ class ForgejoForgeGUI(QMainWindow):
             "💡 'Auto' scans PATH + /usr/local/bin + ~/.local/bin\n"
             "   'Set Path' uses whatever you type above for this session"
         )
-        note.setStyleSheet(f"font-size: 15px; color: {FG_SUBTLE};")
+        note.setStyleSheet(f"font-size: 20px; color: {FG_SUBTLE};")
         pg.addWidget(note)
 
         installer_path = find_installer_binary() or "not found"
         inst_note = QLabel(f"Installer (forgejo-main): {installer_path}")
-        inst_note.setStyleSheet(f"font-size: 15px; color: {FG_SUBTLE};")
+        inst_note.setStyleSheet(f"font-size: 20px; color: {FG_SUBTLE};")
         pg.addWidget(inst_note)
 
         lay.addWidget(grp_path)
@@ -942,7 +1272,7 @@ class ForgejoForgeGUI(QMainWindow):
         # Trigger auto-detect on first show
         QTimer.singleShot(500, self._run_detect_binary)
 
-        return w
+        return self._wrap_scroll(w)
 
     # ── Binary tab slots ──────────────────────────────────────────────
 
@@ -1288,7 +1618,10 @@ class ForgejoForgeGUI(QMainWindow):
     def _set_buttons_enabled(self, enabled: bool):
         for name in ("btn_setup", "btn_start", "btn_stop", "btn_restart",
                      "btn_uninstall", "btn_email_apply",
-                     "btn_bin_install", "btn_bin_update"):
+                     "btn_bin_install", "btn_bin_update",
+                     "btn_runner_install", "btn_runner_uninstall",
+                     "btn_runner_register", "btn_runner_start",
+                     "btn_runner_stop", "btn_runner_status_btn"):
             if hasattr(self, name):
                 getattr(self, name).setEnabled(enabled)
 
