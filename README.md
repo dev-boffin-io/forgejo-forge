@@ -2,7 +2,7 @@
 
 > Part of the [Forge Suite](https://github.com/dev-boffin-io) by [@dev-boffin-io](https://github.com/dev-boffin-io)
 
-A self-contained Git forge management suite — supports **Linux** (systemd & proot/Termux) and **Windows** (amd64 & arm64).
+A self-contained Git forge management suite — supports **Linux** (systemd & proot/Termux), **Windows** (amd64 & arm64), and **macOS** (amd64 & arm64).
 
 ---
 
@@ -12,9 +12,13 @@ A self-contained Git forge management suite — supports **Linux** (systemd & pr
 |---|---|---|
 | Linux (systemd / proot / Termux) | **Forgejo** | codeberg.org/forgejo/forgejo |
 | Windows 10/11 (amd64, arm64) | **Gitea** | dl.gitea.com / github.com/go-gitea/gitea |
+| macOS (amd64, arm64) | **Forgejo** | codeberg.org/forgejo/forgejo |
 
 > **Why Gitea on Windows?**
 > Forgejo dropped Windows support in 2024. Gitea is Forgejo's upstream project, shares the same config format (`app.ini`), CLI flags, and admin commands — so `forgejo-forge` works identically on both.
+
+> **macOS support**
+> The CLI and `forgejo-main` installer build and run on macOS (amd64/arm64) using the same generic, non-systemd code path as proot/Termux (`~/forge-storage/forgejo/`). The GUI requires a native PyInstaller build on macOS — see [Build](#build).
 
 ---
 
@@ -34,6 +38,7 @@ A self-contained Git forge management suite — supports **Linux** (systemd & pr
 |---|---|---|
 | systemd (Linux) | `/etc/forgejo/app.ini` | `/var/lib/forgejo/` |
 | proot (Termux/ARM) | `~/forge-storage/forgejo/custom/conf/app.ini` | `~/forge-storage/forgejo/` |
+| macOS | `~/forge-storage/forgejo/custom/conf/app.ini` | `~/forge-storage/forgejo/` |
 | **Windows** | `%APPDATA%\forgejo-forge\custom\conf\app.ini` | `%APPDATA%\forgejo-forge\` |
 
 ---
@@ -96,6 +101,33 @@ forgejo-forge-gui
 
 ---
 
+## Quick Start — macOS
+
+```bash
+# 1. Install Forgejo binary → ~/forge-storage/forgejo/bin/forgejo
+forgejo-main install
+
+# 2. Setup
+forgejo-forge setup --username admin --password yourpassword
+
+# 3. Open browser → http://localhost:3000
+
+# 4. Stop / status / logs
+forgejo-forge stop
+forgejo-forge status
+forgejo-forge logs -f
+
+# 5. Email (optional)
+forgejo-forge email-setup \
+  --from   git@yourdomain.com \
+  --user   yourname@gmail.com \
+  --passwd "xxxx xxxx xxxx xxxx"
+```
+
+> **Auto-start on login:** `launchd` — create a `LaunchAgent` plist that runs `forgejo-forge start` at login.
+
+---
+
 ## forgejo-main — Binary Installer
 
 Auto-detects OS and downloads the correct binary.
@@ -105,6 +137,8 @@ Auto-detects OS and downloads the correct binary.
 | Linux amd64 | `forgejo` | codeberg.org |
 | Linux arm64 | `forgejo` | codeberg.org |
 | Linux arm | `forgejo` | codeberg.org |
+| **macOS amd64** | `forgejo` | codeberg.org |
+| **macOS arm64** | `forgejo` | codeberg.org |
 | **Windows amd64** | `gitea.exe` | dl.gitea.com |
 | **Windows arm64** | `gitea.exe` | dl.gitea.com |
 
@@ -113,6 +147,7 @@ Auto-detects OS and downloads the correct binary.
 | OS | Path |
 |---|---|
 | Linux | `/usr/local/bin/forgejo` |
+| macOS | `~/forge-storage/forgejo/bin/forgejo` |
 | Windows | `%LOCALAPPDATA%\Programs\gitea\gitea.exe` |
 
 ```
@@ -139,7 +174,7 @@ forgejo-forge uninstall
 
 Auto-detects mode on every run:
 - **systemd** — Linux with systemd; uses `/etc/forgejo/` and `/var/lib/forgejo/`
-- **proot** — Linux without systemd (Termux/ARM); uses `~/forge-storage/forgejo/`
+- **proot** — Linux without systemd (Termux/ARM) or **macOS**; uses `~/forge-storage/forgejo/`
 - **windows** — Windows; uses `%APPDATA%\forgejo-forge\`; process tracked via PID file
 
 ### setup flags
@@ -162,6 +197,47 @@ Auto-detects mode on every run:
 | `--smtp-addr` | `smtp.gmail.com` | SMTP server |
 | `--smtp-port` | `465` | SMTP port |
 | `--protocol` | `smtps` | `smtps` or `smtp` (STARTTLS) |
+
+---
+
+## Runner (CI / Forgejo Actions)
+
+`forgejo-forge runner` manages a [forgejo-runner](https://code.forgejo.org/forgejo/runner) / [gitea-runner](https://gitea.com/gitea/runner) instance — the agent that picks up Forgejo Actions / CI jobs.
+
+```
+forgejo-forge runner install                                  # download + install
+forgejo-forge runner register --url <URL> --token <TOKEN> \
+                                --uuid <UUID> --name <NAME> \
+                                --labels ubuntu-latest:host \
+                                [--clean]
+forgejo-forge runner start
+forgejo-forge runner stop
+forgejo-forge runner status
+forgejo-forge runner uninstall
+```
+
+| OS | Binary | Download source |
+|---|---|---|
+| Linux | `forgejo-runner` | code.forgejo.org / data.forgejo.org |
+| Windows / macOS | `gitea-runner` | gitea.com/gitea/runner |
+
+### register flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--url` | *(required)* | Forgejo/Gitea instance URL |
+| `--token` | *(required)* | Registration token from **Settings → Actions → Runners → Create new runner** |
+| `--uuid` | — | UUID shown on the same "Create new runner" page — **use this for a clean first-time registration** |
+| `--name` | hostname | Runner display name |
+| `--labels` | `ubuntu-latest:host` | Comma-separated labels. `:host` runs jobs directly (no Docker required) |
+| `--clean` | `false` | Discard existing `config.yml` / `.runner` and start fresh |
+| `--runner-bin` | auto-detect | Override path to the runner binary |
+
+> **First-time registration:** copy both the **UUID** and **Token** from the "Create new runner" page and pass both `--uuid` and `--token`. A registration token binds to whatever UUID is first used with it — re-registering with a different (random) UUID while reusing the same token causes `unauthenticated: unregistered runner`. `register` (without `--uuid`) re-uses whatever UUID is already in `config.yml`, so it's safe to re-run.
+
+> **Docker not available?** (e.g. Termux/proot) Use `:host` labels (the default) — jobs run directly on the host shell instead of inside a container.
+
+Config lives at `~/.config/forgejo-runner/config.yml` (Linux/macOS) — same data-path convention as Forgejo itself.
 
 ---
 
@@ -210,6 +286,35 @@ go build -o bin\forgejo-forge.exe .
 cd forgejo-installer && go build -o ..\bin\forgejo-main.exe .
 ```
 
+### Cross-compile macOS from Linux
+```bash
+GOOS=darwin GOARCH=amd64 go build -o bin/forgejo-forge-darwin-amd64 .
+GOOS=darwin GOARCH=arm64 go build -o bin/forgejo-forge-darwin-arm64 .
+cd forgejo-installer
+GOOS=darwin GOARCH=amd64 go build -o ../bin/forgejo-main-darwin-amd64 .
+GOOS=darwin GOARCH=arm64 go build -o ../bin/forgejo-main-darwin-arm64 .
+```
+
+### macOS native (requires Go + Python)
+```bash
+brew install go python3
+make all
+make install && make install-installer && make install-gui
+```
+
+> **GUI on macOS:** PyInstaller does not cross-compile — the `.app`/binary for macOS **must** be built on an actual Mac (or a macOS CI runner). `make gui-build` works the same way as on Linux once run on macOS.
+
+### CI (GitHub / Forgejo Actions)
+| Workflow | Builds |
+|---|---|
+| `build-linux-amd64.yml` / `build-linux-arm64.yml` | CLI + installer (Linux) |
+| `build-windows-amd64.yml` / `build-windows-arm64.yml` | CLI + installer (Windows) |
+| `build-macos.yml` | CLI + installer (macOS, cross-compiled) |
+| `build-gui-linux-amd64.yml` / `build-gui-linux-arm64.yml` | GUI (Linux) |
+| `build-gui-windows-amd64.yml` | GUI (Windows) |
+| `build-gui-macos.yml` | GUI (macOS) — **requires `macos-latest` / `macos-13` GitHub-hosted runners**; will hang on self-hosted-only runner setups that lack macOS runners |
+| `build-installer.yml` | Installer-only build matrix |
+
 ---
 
 ## Project Structure
@@ -218,6 +323,9 @@ cd forgejo-installer && go build -o ..\bin\forgejo-main.exe .
 forgejo-forge/
 ├── main.go
 ├── cmd/                        # CLI subcommands (setup/start/stop/restart/status/logs/email/uninstall)
+│   ├── runner.go               # runner install/register/start/stop/status/uninstall
+│   ├── runner_sysproc_unix.go  # detached-process attrs (Linux/macOS)
+│   └── runner_sysproc_windows.go # detached-process attrs (Windows)
 ├── internal/
 │   ├── admin/create.go         # admin user create (Forgejo & Gitea compatible)
 │   ├── config/                 # app.ini writer, reader, mailer patcher
