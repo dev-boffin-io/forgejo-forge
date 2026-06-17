@@ -32,5 +32,6 @@ func init() {
 		emailCmd,
 		uninstallCmd,
 		runnerCmd,
+		configCmd,
 	)
 }

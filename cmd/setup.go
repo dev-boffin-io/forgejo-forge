@@ -23,6 +23,7 @@ var (
 	flagEmail    string
 	flagPort     int
 	flagDomain   string
+	flagActions  bool
 )
 
 var setupCmd = &cobra.Command{
@@ -37,6 +38,7 @@ func init() {
 	setupCmd.Flags().StringVar(&flagEmail, "email", "", "Admin email (defaults to <username>@example.com)")
 	setupCmd.Flags().IntVar(&flagPort, "port", 3000, "Preferred HTTP port (auto-increments if busy)")
 	setupCmd.Flags().StringVar(&flagDomain, "domain", "", "Custom domain for ROOT_URL (e.g. git.local)")
+	setupCmd.Flags().BoolVar(&flagActions, "actions", false, "Enable Forgejo Actions (CI/CD) and local artifact storage in app.ini")
 
 	_ = setupCmd.MarkFlagRequired("password")
 }
@@ -73,6 +75,45 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 	default:
 		return setupProot(forgejoBin)
 	}
+}
+
+// applyActionsConfig enables Forgejo Actions (CI/CD) and local artifact
+// storage in app.ini when --actions is set. Safe to call even if the
+// sections already exist — existing keys are updated in place.
+//
+// baseDir is the per-mode data directory (paths.BaseDir for proot/windows;
+// pass "" for systemd, which falls back to /var/lib/forgejo). The artifact
+// cache is stored at <baseDir>/artifacts.
+func applyActionsConfig(iniPath, baseDir string) error {
+	if !flagActions {
+		return nil
+	}
+	return enableActionsConfig(iniPath, baseDir)
+}
+
+// enableActionsConfig does the actual work of writing [actions] and
+// [actions.artifacts] (including a concrete PATH) into app.ini, regardless
+// of any CLI flag. Shared by `setup --actions` and `config enable-actions`.
+func enableActionsConfig(iniPath, baseDir string) error {
+	if baseDir == "" {
+		baseDir = "/var/lib/forgejo"
+	}
+	artifactsPath := filepath.Join(baseDir, "artifacts")
+	if err := os.MkdirAll(artifactsPath, 0o750); err != nil {
+		return fmt.Errorf("create artifacts dir %s: %w", artifactsPath, err)
+	}
+
+	if err := config.SetKey(iniPath, "actions", "ENABLED", "true"); err != nil {
+		return fmt.Errorf("enable [actions]: %w", err)
+	}
+	if err := config.SetKey(iniPath, "actions.artifacts", "STORAGE_TYPE", "local"); err != nil {
+		return fmt.Errorf("enable [actions.artifacts]: %w", err)
+	}
+	if err := config.SetKey(iniPath, "actions.artifacts", "PATH", artifactsPath); err != nil {
+		return fmt.Errorf("set [actions.artifacts] PATH: %w", err)
+	}
+	fmt.Printf("✔ Forgejo Actions + local artifact storage enabled (cache: %s)\n", artifactsPath)
+	return nil
 }
 
 // ── Systemd ───────────────────────────────────────────────────────────────────
@@ -130,6 +171,10 @@ func setupSystemd(forgejoBin string) error {
 		fmt.Printf("✔ Config written: %s\n", paths.IniPath)
 	} else {
 		fmt.Printf("⚠ Config already exists, skipping overwrite: %s\n", paths.IniPath)
+	}
+
+	if err := applyActionsConfig(paths.IniPath, paths.BaseDir); err != nil {
+		return err
 	}
 
 	if err := writeSystemdUnit(forgejoBin, paths.IniPath); err != nil {
@@ -232,6 +277,10 @@ func setupProot(forgejoBin string) error {
 		fmt.Printf("⚠ Config already exists, skipping overwrite: %s\n", paths.IniPath)
 	}
 
+	if err := applyActionsConfig(paths.IniPath, paths.BaseDir); err != nil {
+		return err
+	}
+
 	runner.KillExisting()
 	pid, err := runner.StartBackground(forgejoBin, paths.IniPath, paths.LogFile, paths.BaseDir)
 	if err != nil {
@@ -303,6 +352,10 @@ func setupWindows(forgejoBin string) error {
 		fmt.Printf("✔ Config written: %s\n", paths.IniPath)
 	} else {
 		fmt.Printf("⚠ Config already exists, skipping overwrite: %s\n", paths.IniPath)
+	}
+
+	if err := applyActionsConfig(paths.IniPath, paths.BaseDir); err != nil {
+		return err
 	}
 
 	// Kill any existing process before starting fresh

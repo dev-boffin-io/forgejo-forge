@@ -26,7 +26,7 @@ A self-contained Git forge management suite — supports **Linux** (systemd & pr
 
 | Binary | Description |
 |---|---|
-| `forgejo-forge` | CLI — setup, start, stop, restart, status, logs, email-setup, uninstall |
+| `forgejo-forge` | CLI — setup, start, stop, restart, status, logs, email-setup, config, uninstall |
 | `forgejo-main` | Installer — downloads Forgejo (Linux) or Gitea (Windows) |
 | `forgejo-forge-gui` | PyQt6 GUI frontend for `forgejo-forge` |
 
@@ -162,13 +162,14 @@ forgejo-main uninstall    # Remove the binary
 ## forgejo-forge CLI
 
 ```
-forgejo-forge setup       [--username] [--password] [--email] [--port] [--domain]
+forgejo-forge setup       [--username] [--password] [--email] [--port] [--domain] [--actions]
 forgejo-forge start
 forgejo-forge stop
 forgejo-forge restart
 forgejo-forge status
 forgejo-forge logs        [-f] [-n <lines>]
 forgejo-forge email-setup [--from] [--user] [--passwd] [--smtp-addr] [--smtp-port] [--protocol]
+forgejo-forge config      path | sections | list | get | set | remove | raw-get | raw-set | enable-actions
 forgejo-forge uninstall
 ```
 
@@ -186,6 +187,7 @@ Auto-detects mode on every run:
 | `--email` | `<username>@example.com` | Admin email |
 | `--port` | `3000` | HTTP port (auto-increments if busy) |
 | `--domain` | — | Custom domain for `ROOT_URL` |
+| `--actions` | `false` | Enable Forgejo Actions (CI/CD) + local artifact storage in `app.ini` |
 
 ### email-setup flags
 
@@ -197,6 +199,39 @@ Auto-detects mode on every run:
 | `--smtp-addr` | `smtp.gmail.com` | SMTP server |
 | `--smtp-port` | `465` | SMTP port |
 | `--protocol` | `smtps` | `smtps` or `smtp` (STARTTLS) |
+
+---
+
+## Config (app.ini)
+
+`forgejo-forge config` reads and edits the `app.ini` written by `setup`, without needing to know which mode (systemd/proot/Windows) is active — it resolves the same path `setup` would use.
+
+```
+forgejo-forge config path                            # print resolved app.ini path
+forgejo-forge config sections                         # list all [section] names
+forgejo-forge config list <section>                   # list key=value pairs in a section
+forgejo-forge config get <section> <key>               # print one value
+forgejo-forge config set <section> <key> <value>       # set/add a key (creates section if needed)
+forgejo-forge config remove <section> <key>            # remove a key (drops section if it becomes empty)
+forgejo-forge config raw-get                            # print the entire app.ini
+forgejo-forge config raw-set                            # replace app.ini from stdin (writes app.ini.bak first)
+forgejo-forge config enable-actions                     # enable [actions] + [actions.artifacts] on an existing install
+```
+
+`set`/`remove`/`raw-set`/`enable-actions` don't restart Forgejo automatically — run `forgejo-forge restart` afterwards for changes to take effect.
+
+`enable-actions` is the same logic as `setup --actions`, but for an install that's already configured — it writes:
+
+```ini
+[actions]
+ENABLED = true
+
+[actions.artifacts]
+STORAGE_TYPE = local
+PATH = <data-dir>/artifacts
+```
+
+> The GUI exposes this as **📝 Edit app.ini** (full editor with syntax highlighting + warnings for duplicate sections / malformed lines) and **Apply Now** next to the Actions checkbox (runs `config enable-actions` without re-running setup).
 
 ---
 
@@ -322,13 +357,14 @@ make install && make install-installer && make install-gui
 ```
 forgejo-forge/
 ├── main.go
-├── cmd/                        # CLI subcommands (setup/start/stop/restart/status/logs/email/uninstall)
+├── cmd/                        # CLI subcommands (setup/start/stop/restart/status/logs/email/config/uninstall)
+│   ├── config.go               # config path/sections/list/get/set/remove/raw-get/raw-set/enable-actions
 │   ├── runner.go               # runner install/register/start/stop/status/uninstall
 │   ├── runner_sysproc_unix.go  # detached-process attrs (Linux/macOS)
 │   └── runner_sysproc_windows.go # detached-process attrs (Windows)
 ├── internal/
 │   ├── admin/create.go         # admin user create (Forgejo & Gitea compatible)
-│   ├── config/                 # app.ini writer, reader, mailer patcher
+│   ├── config/                 # app.ini writer, reader, mailer patcher, editor (set/remove/list key=value)
 │   ├── detect/env.go           # mode detection; ForgejoBin() → gitea.exe on Windows
 │   ├── netutil/                # port detection, LAN IP, cloudflared
 │   ├── runner/                 # process management (GITEA_WORK_DIR on Windows)
@@ -339,7 +375,7 @@ forgejo-forge/
 │       ├── download/           # dual-source downloader (Codeberg / dl.gitea.com)
 │       ├── install/            # install/uninstall binary
 │       └── version/            # version fetch (Codeberg API / GitHub API)
-├── gui/                        # PyQt6 GUI
+├── gui/                        # PyQt6 GUI (incl. app.ini editor dialog + INI syntax highlighter)
 └── Makefile
 ```
 

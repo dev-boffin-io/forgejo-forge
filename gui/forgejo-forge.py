@@ -15,10 +15,13 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QGroupBox, QSpinBox,
     QTabWidget, QFrame, QSizePolicy, QMessageBox, QCheckBox, QComboBox,
-    QScrollArea,
+    QScrollArea, QDialog, QPlainTextEdit,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QProcess
-from PyQt6.QtGui import QFont, QColor, QPalette, QTextCursor
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QProcess, QRegularExpression
+from PyQt6.QtGui import (
+    QFont, QColor, QPalette, QTextCursor,
+    QSyntaxHighlighter, QTextCharFormat,
+)
 
 # ── ANSI strip ────────────────────────────────────────────────────────────────
 
@@ -492,6 +495,203 @@ def screen_aware_size(app: QApplication) -> tuple[int, int]:
     return w, h
 
 
+# ── INI syntax highlighter ───────────────────────────────────────────────────
+
+class IniSyntaxHighlighter(QSyntaxHighlighter):
+    """Lightweight syntax highlighter for app.ini (Gitea/Forgejo config).
+
+    Highlights:
+      - [section] headers
+      - key names (before '=')
+      - '=' separators
+      - values: booleans, numbers, and generic strings get distinct colors
+      - comments (';' or '#')
+    Warnings (underlined in a warning color):
+      - duplicate [section] headers
+      - lines that look like 'key value' with no '=' (likely a typo)
+      - unmatched '[' / ']' on a line claiming to be a section header
+    """
+
+    def __init__(self, document):
+        super().__init__(document)
+
+        self._fmt_section = self._fmt(MAUVE, bold=True)
+        self._fmt_key = self._fmt(TEAL)
+        self._fmt_op = self._fmt(FG_SUBTLE)
+        self._fmt_bool = self._fmt(GREEN, bold=True)
+        self._fmt_number = self._fmt(YELLOW)
+        self._fmt_value = self._fmt(FG_TEXT)
+        self._fmt_comment = self._fmt(FG_SUBTLE, italic=True)
+        self._fmt_warning = self._fmt(RED, underline=True)
+
+        self._re_section = QRegularExpression(r"^\s*\[[^\]]*\]\s*$")
+        self._re_kv = QRegularExpression(r"^(\s*)([^=;#\[][^=]*?)(\s*=\s*)(.*)$")
+        self._re_comment = QRegularExpression(r"^\s*[;#].*$")
+        self._re_bool = QRegularExpression(r"^(true|false)$", QRegularExpression.PatternOption.CaseInsensitiveOption)
+        self._re_number = QRegularExpression(r"^-?\d+(\.\d+)?$")
+
+        self._seen_sections: set[str] = set()
+
+    @staticmethod
+    def _fmt(color: str, bold: bool = False, italic: bool = False, underline: bool = False) -> QTextCharFormat:
+        f = QTextCharFormat()
+        f.setForeground(QColor(color))
+        if bold:
+            f.setFontWeight(QFont.Weight.Bold)
+        if italic:
+            f.setFontItalic(True)
+        if underline:
+            f.setUnderlineStyle(QTextCharFormat.UnderlineStyle.SpellCheckUnderline)
+            f.setUnderlineColor(QColor(color))
+        return f
+
+    def highlightBlock(self, text: str):
+        # Reset the duplicate-section tracker at the start of a fresh pass
+        # over the whole document (block 0).
+        if self.currentBlock().blockNumber() == 0:
+            self._seen_sections = set()
+
+        stripped = text.strip()
+        if not stripped:
+            return
+
+        # Comments
+        if self._re_comment.match(text).hasMatch():
+            self.setFormat(0, len(text), self._fmt_comment)
+            return
+
+        # Section headers: [name]
+        if stripped.startswith("["):
+            if self._re_section.match(text).hasMatch():
+                self.setFormat(0, len(text), self._fmt_section)
+                name = stripped.strip("[]").strip()
+                if name in self._seen_sections:
+                    self.setFormat(0, len(text), self._fmt_warning)
+                    self.setToolTip(f"Duplicate section: [{name}]")
+                else:
+                    self._seen_sections.add(name)
+            else:
+                # Looks like a section header but malformed (missing ']' etc.)
+                self.setFormat(0, len(text), self._fmt_warning)
+            return
+
+        # key = value
+        m = self._re_kv.match(text)
+        if m.hasMatch():
+            key_start = m.capturedStart(2)
+            key_len = m.capturedLength(2)
+            op_start = m.capturedStart(3)
+            op_len = m.capturedLength(3)
+            val_start = m.capturedStart(4)
+            val_len = m.capturedLength(4)
+
+            self.setFormat(key_start, key_len, self._fmt_key)
+            self.setFormat(op_start, op_len, self._fmt_op)
+
+            value = m.captured(4).strip()
+            if self._re_bool.match(value).hasMatch():
+                self.setFormat(val_start, val_len, self._fmt_bool)
+            elif self._re_number.match(value).hasMatch():
+                self.setFormat(val_start, val_len, self._fmt_number)
+            else:
+                self.setFormat(val_start, val_len, self._fmt_value)
+            return
+
+        # Anything else non-blank with no '=' — likely a typo'd key/value line.
+        self.setFormat(0, len(text), self._fmt_warning)
+
+
+# ── app.ini editor dialog ────────────────────────────────────────────────────
+
+class IniEditorDialog(QDialog):
+    """Full-screen-ish popup editor for app.ini with syntax highlighting,
+    line numbers via a monospace font, and a status bar showing line count
+    and any detected warnings (duplicate sections, malformed lines)."""
+
+    def __init__(self, content: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edit app.ini")
+        self.setModal(True)
+        self.resize(900, 700)
+        self.setMinimumSize(560, 400)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(8)
+
+        hint = QLabel(
+            "💡 Syntax: [section] headers (mauve), keys (teal), "
+            "true/false (green), numbers (yellow), comments (italic). "
+            "Lines underlined in red look malformed (missing '=', duplicate "
+            "section, or unclosed '[...]')."
+        )
+        hint.setStyleSheet(f"font-size: 18px; color: {FG_SUBTLE};")
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
+
+        self.text_edit = QPlainTextEdit()
+        self.text_edit.setPlainText(content)
+        self.text_edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        mono = QFont("JetBrains Mono", 22)
+        mono.setStyleHint(QFont.StyleHint.Monospace)
+        self.text_edit.setFont(mono)
+        self.text_edit.setStyleSheet(
+            f"QPlainTextEdit {{ background-color: {BG_MANTLE}; color: {FG_TEXT}; "
+            f"border: 1px solid {BG_OVERLAY}; border-radius: 4px; padding: 6px; }}"
+        )
+        self.highlighter = IniSyntaxHighlighter(self.text_edit.document())
+        lay.addWidget(self.text_edit, stretch=1)
+
+        self.status_label = QLabel()
+        self.status_label.setStyleSheet(f"font-size: 18px; color: {FG_SUBTLE};")
+        lay.addWidget(self.status_label)
+        self.text_edit.textChanged.connect(self._update_status)
+        self._update_status()
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setFixedHeight(44)
+        btn_cancel.clicked.connect(self.reject)
+        btn_save = QPushButton("💾  Save")
+        btn_save.setFixedHeight(44)
+        btn_save.setObjectName("btn_setup")  # reuse the green accent style
+        btn_save.clicked.connect(self.accept)
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_save)
+        lay.addLayout(btn_row)
+
+    def _update_status(self):
+        text = self.text_edit.toPlainText()
+        lines = text.split("\n")
+        n_lines = len(lines)
+
+        sections: dict[str, int] = {}
+        warnings = 0
+        for i, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith((";", "#")):
+                continue
+            if stripped.startswith("["):
+                if stripped.endswith("]") and len(stripped) >= 2:
+                    name = stripped.strip("[]").strip()
+                    if name in sections:
+                        warnings += 1
+                    sections[name] = i
+                else:
+                    warnings += 1
+            elif "=" not in stripped:
+                warnings += 1
+
+        msg = f"{n_lines} lines · {len(sections)} sections"
+        if warnings:
+            msg += f"  ·  ⚠ {warnings} possible issue(s) — check underlined lines"
+            self.status_label.setStyleSheet(f"font-size: 18px; color: {RED};")
+        else:
+            self.status_label.setStyleSheet(f"font-size: 18px; color: {FG_SUBTLE};")
+        self.status_label.setText(msg)
+
+
 # ── Main window ───────────────────────────────────────────────────────────────
 
 class ForgejoForgeGUI(QMainWindow):
@@ -635,7 +835,44 @@ class ForgejoForgeGUI(QMainWindow):
         row3.addWidget(self.inp_domain)
         sg.addLayout(row3)
 
+        actions_row = QHBoxLayout()
+        self.chk_actions = QCheckBox("Enable Forgejo Actions (CI/CD) + local artifact storage")
+        self.chk_actions.setToolTip(
+            "Adds [actions] ENABLED=true and [actions.artifacts] STORAGE_TYPE=local "
+            "+ PATH to app.ini, so workflow artifact uploads work with self-hosted runners."
+        )
+        actions_row.addWidget(self.chk_actions, stretch=1)
+
+        btn_actions_apply = QPushButton("Apply Now")
+        btn_actions_apply.setToolTip(
+            "Apply [actions] settings to the existing app.ini immediately, "
+            "without re-running setup (use this if Forgejo is already configured)."
+        )
+        btn_actions_apply.clicked.connect(self._apply_actions_now)
+        actions_row.addWidget(btn_actions_apply)
+        sg.addLayout(actions_row)
+
         lay.addWidget(srv)
+
+        # Config editor (raw app.ini section/key edits)
+        cfg_grp = QGroupBox("app.ini Editor")
+        cfgg = QVBoxLayout(cfg_grp)
+        cfgg.setSpacing(8)
+
+        cfg_hint = QLabel(
+            "💡 Open the full app.ini in a text editor with syntax highlighting "
+            "and inline warnings. Restart Forgejo afterwards for changes to take effect."
+        )
+        cfg_hint.setStyleSheet(f"font-size: 20px; color: {FG_SUBTLE};")
+        cfg_hint.setWordWrap(True)
+        cfgg.addWidget(cfg_hint)
+
+        btn_cfg_edit = QPushButton("📝  Edit app.ini")
+        btn_cfg_edit.setFixedHeight(48)
+        btn_cfg_edit.clicked.connect(self._open_ini_editor)
+        cfgg.addWidget(btn_cfg_edit)
+
+        lay.addWidget(cfg_grp)
 
         # Action
         btn_row = QHBoxLayout()
@@ -1431,6 +1668,68 @@ class ForgejoForgeGUI(QMainWindow):
 
     # ── Command runners ───────────────────────────────────────────────
 
+    # ── app.ini editor ───────────────────────────────────────────────
+
+    def _apply_actions_now(self):
+        """Apply [actions]/[actions.artifacts] settings to the existing
+        app.ini immediately (does not require re-running setup)."""
+        self._run_command(["config", "enable-actions"])
+
+    def _open_ini_editor(self):
+        """Read app.ini via the CLI, show it in a syntax-highlighted popup
+        editor, and write changes back via the CLI on Save."""
+        binary = find_binary(self._custom_forgejo_path)
+        if not binary:
+            QMessageBox.warning(self, "Binary not found",
+                                "Could not locate the forgejo-forge binary.")
+            return
+
+        try:
+            result = subprocess.run(
+                [binary, "config", "raw-get"],
+                capture_output=True, text=True, timeout=10,
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to read app.ini:\n{e}")
+            return
+
+        if result.returncode != 0:
+            QMessageBox.critical(
+                self, "Error",
+                f"Failed to read app.ini:\n{(result.stderr or result.stdout).strip()}"
+            )
+            return
+
+        dialog = IniEditorDialog(result.stdout, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        new_content = dialog.text_edit.toPlainText()
+        if not new_content.endswith("\n"):
+            new_content += "\n"
+
+        try:
+            result = subprocess.run(
+                [binary, "config", "raw-set"],
+                input=new_content, capture_output=True, text=True, timeout=10,
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to write app.ini:\n{e}")
+            return
+
+        if result.returncode != 0:
+            QMessageBox.critical(
+                self, "Error",
+                f"Failed to write app.ini:\n{(result.stderr or result.stdout).strip()}"
+            )
+            return
+
+        self._console_write(result.stdout.strip(), color=GREEN)
+        self._console_write(
+            "⚠ Restart Forgejo for changes to take effect (Control tab).",
+            color=YELLOW,
+        )
+
     def _run_setup(self):
         password = self.inp_password.text().strip()
         if not password:
@@ -1447,6 +1746,8 @@ class ForgejoForgeGUI(QMainWindow):
         args += ["--port", str(self.inp_port.value())]
         if domain := self.inp_domain.text().strip():
             args += ["--domain", domain]
+        if self.chk_actions.isChecked():
+            args += ["--actions"]
 
         self._run_command(args)
 
