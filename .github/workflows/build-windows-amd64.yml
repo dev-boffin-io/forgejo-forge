@@ -60,7 +60,7 @@ jobs:
             -o ../bin/forgejo-main-windows-amd64.exe .
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: forgejo-forge-windows-amd64
           path: |

@@ -65,7 +65,7 @@ jobs:
             -o ../bin/forgejo-main-darwin-${{ matrix.goarch }} .
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: forgejo-forge-darwin-${{ matrix.goarch }}
           path: |

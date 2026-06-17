@@ -17,10 +17,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python (GitHub-hosted)
+        id: setup_python
         uses: actions/setup-python@v5
+        continue-on-error: true
         with:
           python-version: '3.12'
+
+      - name: Fallback — system Python (Forgejo / self-hosted)
+        if: steps.setup_python.outcome == 'failure'
+        run: |
+          echo "actions/setup-python failed — checking system Python..."
+          python3 --version || python --version
 
       - name: Install system dependencies
         run: |
@@ -57,7 +65,7 @@ jobs:
             gui/forgejo-forge.py
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: forgejo-forge-gui-linux-arm64
           path: bin/forgejo-forge-gui-arm64

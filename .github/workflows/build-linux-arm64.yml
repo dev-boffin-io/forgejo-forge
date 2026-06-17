@@ -60,7 +60,7 @@ jobs:
             -o ../bin/forgejo-main-arm64 .
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: forgejo-forge-linux-arm64
           path: |

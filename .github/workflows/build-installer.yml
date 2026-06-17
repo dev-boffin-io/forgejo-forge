@@ -62,7 +62,7 @@ jobs:
             -o ../bin/${{ matrix.output }} .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: forgejo-installer-${{ matrix.name }}
           path: bin/${{ matrix.output }}
@@ -77,14 +77,17 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           path: dist
-          pattern: forgejo-installer-*
-          merge-multiple: true
+
+      - name: Flatten downloaded artifacts
+        run: |
+          mkdir -p dist/flat
+          find dist -mindepth 2 -maxdepth 2 -type f -exec mv -t dist/flat {} +
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: dist/flat/*
           generate_release_notes: false

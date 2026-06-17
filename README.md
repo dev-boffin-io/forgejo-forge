@@ -350,6 +350,9 @@ make install && make install-installer && make install-gui
 | `build-gui-macos.yml` | GUI (macOS) — **requires `macos-latest` / `macos-13` GitHub-hosted runners**; will hang on self-hosted-only runner setups that lack macOS runners |
 | `build-installer.yml` | Installer-only build matrix |
 
+> **Forgejo self-hosted runner compatibility:** all workflows pin `actions/upload-artifact` (and `build-installer.yml`'s `download-artifact`) to **`@v3`** — `@v4` hard-fails on Forgejo/Gitea with `GHESNotSupportedError` since it only talks to github.com's artifact API. The GUI workflows additionally try `actions/setup-python@v5` first and fall back to whatever `python3`/`python` is already on the runner if that action fails (common on Forgejo self-hosted ARM64/proot runners, which can't resolve the GitHub-hosted Python version manifest).
+
+
 ---
 
 ## Project Structure
