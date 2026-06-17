@@ -87,7 +87,7 @@ jobs:
           find dist -mindepth 2 -maxdepth 2 -type f -exec mv -t dist/flat {} +
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: https://github.com/softprops/action-gh-release@v2
         with:
           files: dist/flat/*
           generate_release_notes: false
