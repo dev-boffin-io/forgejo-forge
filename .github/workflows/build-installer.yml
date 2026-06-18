@@ -86,8 +86,9 @@ jobs:
           mkdir -p dist/flat
           find dist -mindepth 2 -maxdepth 2 -type f -exec mv -t dist/flat {} +
 
-      - name: Create GitHub Release
-        uses: https://github.com/softprops/action-gh-release@v2
+      - name: Create Forgejo Release
+        uses: actions/forgejo-release@v2
         with:
-          files: dist/flat/*
-          generate_release_notes: false
+          direction: upload
+          token: ${{ secrets.GITHUB_TOKEN }}
+          release-dir: dist/flat
