@@ -57,7 +57,7 @@ jobs:
         shell: pwsh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: forgejo-forge-gui-windows-amd64
           path: bin/forgejo-forge-gui-windows-amd64.exe

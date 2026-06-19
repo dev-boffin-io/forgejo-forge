@@ -65,7 +65,7 @@ jobs:
             gui/forgejo-forge.py
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: forgejo-forge-gui-linux-arm64
           path: bin/forgejo-forge-gui-arm64
