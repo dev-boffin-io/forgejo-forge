@@ -69,10 +69,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Create Forgejo Release
+      - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/forgejo-release@v2
+        uses: softprops/action-gh-release@v2
         with:
-          direction: upload
-          token: ${{ secrets.GITHUB_TOKEN }}
-          release-dir: bin
+          files: |
+            bin/forgejo-forge-amd64
+            bin/forgejo-main-amd64
+          generate_release_notes: false
