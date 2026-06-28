@@ -65,7 +65,10 @@ ROOT_PATH = %s
 [security]
 INSTALL_LOCK = true
 SECRET_KEY   = AUTO
-`, p.RunUser, p.WorkPath, p.DBPath, p.RepoRoot, p.Port, p.RootURL, p.LogPath)) writes the proot app.ini.
+`, p.RunUser, p.WorkPath, p.DBPath, p.RepoRoot, p.Port, p.RootURL, p.LogPath))
+}
+
+// WriteProot writes the proot app.ini.
 // INSTALL_LOCK = true so gitea admin user create works immediately.
 // Returns (written bool, error). written=false means file already existed.
 func WriteProot(iniPath string, p ProotParams) (bool, error) {
