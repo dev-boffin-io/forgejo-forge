@@ -567,7 +567,6 @@ class IniSyntaxHighlighter(QSyntaxHighlighter):
                 name = stripped.strip("[]").strip()
                 if name in self._seen_sections:
                     self.setFormat(0, len(text), self._fmt_warning)
-                    self.setToolTip(f"Duplicate section: [{name}]")
                 else:
                     self._seen_sections.add(name)
             else:
