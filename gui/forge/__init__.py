@@ -1,0 +1,1 @@
+"""forgejo-forge GUI package."""
