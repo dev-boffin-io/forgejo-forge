@@ -75,6 +75,20 @@ Example:
 	RunE: runConfigRawSet,
 }
 
+var configEnablePushCreateCmd = &cobra.Command{
+	Use:   "enable-push-create",
+	Short: "Enable push-to-create for users and orgs in app.ini",
+	Long: `Enable push-to-create without re-running the full 'setup' command.
+Writes into [repository]:
+
+  ENABLE_PUSH_CREATE_USER = true
+  ENABLE_PUSH_CREATE_ORG  = true
+
+Useful if you already ran setup, or if you want to enable this feature
+on an existing Forgejo instance managed by forgejo-forge.`,
+	RunE: runConfigEnablePushCreate,
+}
+
 var configEnableActionsCmd = &cobra.Command{
 	Use:   "enable-actions",
 	Short: "Enable [actions] + [actions.artifacts] with a local artifact cache path",
@@ -105,6 +119,7 @@ func init() {
 		configRawGetCmd,
 		configRawSetCmd,
 		configEnableActionsCmd,
+		configEnablePushCreateCmd,
 	)
 }
 
@@ -216,6 +231,21 @@ func runConfigRemove(_ *cobra.Command, args []string) error {
 		return nil
 	}
 	fmt.Printf("✔ Removed [%s] %s  (from %s)\n", section, key, iniPath)
+	fmt.Println("  Restart Forgejo for this change to take effect: forgejo-forge restart")
+	return nil
+}
+
+func runConfigEnablePushCreate(_ *cobra.Command, _ []string) error {
+	paths, err := resolvePaths()
+	if err != nil {
+		return err
+	}
+	if err := config.Exists(paths.IniPath); err != nil {
+		return err
+	}
+	if err := enablePushCreateConfig(paths.IniPath); err != nil {
+		return err
+	}
 	fmt.Println("  Restart Forgejo for this change to take effect: forgejo-forge restart")
 	return nil
 }

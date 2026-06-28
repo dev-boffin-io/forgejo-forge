@@ -18,12 +18,13 @@ import (
 )
 
 var (
-	flagUsername string
-	flagPassword string
-	flagEmail    string
-	flagPort     int
-	flagDomain   string
-	flagActions  bool
+	flagUsername   string
+	flagPassword   string
+	flagEmail      string
+	flagPort       int
+	flagDomain     string
+	flagActions    bool
+	flagPushCreate bool
 )
 
 var setupCmd = &cobra.Command{
@@ -38,7 +39,8 @@ func init() {
 	setupCmd.Flags().StringVar(&flagEmail, "email", "", "Admin email (defaults to <username>@example.com)")
 	setupCmd.Flags().IntVar(&flagPort, "port", 3000, "Preferred HTTP port (auto-increments if busy)")
 	setupCmd.Flags().StringVar(&flagDomain, "domain", "", "Custom domain for ROOT_URL (e.g. git.local)")
-	setupCmd.Flags().BoolVar(&flagActions, "actions", false, "Enable Forgejo Actions (CI/CD) and local artifact storage in app.ini")
+	setupCmd.Flags().BoolVar(&flagActions, "actions", true, "Enable Forgejo Actions (CI/CD) and local artifact storage in app.ini (default: true; disable with --actions=false)")
+	setupCmd.Flags().BoolVar(&flagPushCreate, "push-create", true, "Enable push-to-create (auto-create repos on first push)")
 
 	_ = setupCmd.MarkFlagRequired("password")
 }
@@ -91,7 +93,29 @@ func applyActionsConfig(iniPath, baseDir string) error {
 	return enableActionsConfig(iniPath, baseDir)
 }
 
-// enableActionsConfig does the actual work of writing [actions] and
+// applyPushCreateConfig enables push-to-create (auto-create repo on first push)
+// in app.ini when --push-create is set (default: true). Safe to call even if
+// the [repository] section already exists — existing keys are updated in place.
+func applyPushCreateConfig(iniPath string) error {
+	if !flagPushCreate {
+		return nil
+	}
+	return enablePushCreateConfig(iniPath)
+}
+
+// enablePushCreateConfig does the actual work of writing ENABLE_PUSH_CREATE_USER
+// and ENABLE_PUSH_CREATE_ORG into [repository] in app.ini. Shared by
+// `setup --push-create` and `config enable-push-create`.
+func enablePushCreateConfig(iniPath string) error {
+	if err := config.SetKey(iniPath, "repository", "ENABLE_PUSH_CREATE_USER", "true"); err != nil {
+		return fmt.Errorf("enable push-to-create (user): %w", err)
+	}
+	if err := config.SetKey(iniPath, "repository", "ENABLE_PUSH_CREATE_ORG", "true"); err != nil {
+		return fmt.Errorf("enable push-to-create (org): %w", err)
+	}
+	fmt.Println("✔ Push-to-create enabled (user repos + org repos)")
+	return nil
+}
 // [actions.artifacts] (including a concrete PATH) into app.ini, regardless
 // of any CLI flag. Shared by `setup --actions` and `config enable-actions`.
 func enableActionsConfig(iniPath, baseDir string) error {
@@ -174,6 +198,10 @@ func setupSystemd(forgejoBin string) error {
 	}
 
 	if err := applyActionsConfig(paths.IniPath, paths.BaseDir); err != nil {
+		return err
+	}
+
+	if err := applyPushCreateConfig(paths.IniPath); err != nil {
 		return err
 	}
 
@@ -281,6 +309,10 @@ func setupProot(forgejoBin string) error {
 		return err
 	}
 
+	if err := applyPushCreateConfig(paths.IniPath); err != nil {
+		return err
+	}
+
 	runner.KillExisting()
 	pid, err := runner.StartBackground(forgejoBin, paths.IniPath, paths.LogFile, paths.BaseDir)
 	if err != nil {
@@ -355,6 +387,10 @@ func setupWindows(forgejoBin string) error {
 	}
 
 	if err := applyActionsConfig(paths.IniPath, paths.BaseDir); err != nil {
+		return err
+	}
+
+	if err := applyPushCreateConfig(paths.IniPath); err != nil {
 		return err
 	}
 
