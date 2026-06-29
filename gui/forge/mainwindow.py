@@ -20,6 +20,7 @@ from forge.dialogs.ini_editor import IniEditorDialog
 from forge.tabs.binary import BinaryTab
 from forge.tabs.control import ControlTab
 from forge.tabs.email import EmailTab
+from forge.tabs.git_manager import GitManagerTab
 from forge.tabs.logs import LogsTab
 from forge.tabs.runner import RunnerTab
 from forge.tabs.setup import SetupTab
@@ -76,6 +77,7 @@ class ForgejoForgeGUI(QMainWindow):
         self.tab_runner   = RunnerTab()
         self.tab_logs     = LogsTab()
         self.tab_binary   = BinaryTab()
+        self.tab_git      = GitManagerTab()
 
         tabs = QTabWidget()
         tabs.addTab(self.tab_setup,   "⚙  Setup")
@@ -84,6 +86,7 @@ class ForgejoForgeGUI(QMainWindow):
         tabs.addTab(self.tab_runner,  "🏃  Runner")
         tabs.addTab(self.tab_logs,    "📄  Logs")
         tabs.addTab(self.tab_binary,  "🔧  Binary")
+        tabs.addTab(self.tab_git,     "⬡  Git")
         root.addWidget(tabs, stretch=1)
 
         root.addWidget(self._make_console())

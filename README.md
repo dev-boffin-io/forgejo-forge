@@ -28,7 +28,7 @@ A self-contained Git forge management suite — supports **Linux** (systemd & pr
 |---|---|
 | `forgejo-forge` | CLI — setup, start, stop, restart, status, logs, email-setup, config, uninstall |
 | `forgejo-main` | Installer — downloads Forgejo (Linux) or Gitea (Windows) |
-| `forgejo-forge-gui` | PyQt6 GUI frontend for `forgejo-forge` |
+| `forgejo-forge-gui` | PyQt6 GUI frontend for `forgejo-forge` — includes the ⬡ Git Manager tab |
 
 ---
 
@@ -247,6 +247,52 @@ This lets users and org members create a new repository by simply pushing to a n
 
 ---
 
+## Forge Git Manager
+
+The **⬡ Git tab** inside `forgejo-forge-gui` embeds [Forge Git Manager](https://github.com/dev-boffin-io/forge-git-manager) — a standalone multi-tab Git workflow GUI designed to work alongside Forgejo.
+
+Click **⬡ Open Git Manager** to launch it as a separate window. It runs inside the same Python process and shares the same Qt event loop — no extra install, no extra binary.
+
+### Tabs
+
+| Tab | What it does |
+|---|---|
+| ⚙️ **Git Binary** | Auto-detect installed `git`; install via package manager if missing; shows path + version |
+| 📦 **Extractor** | Scan a folder for bare `.git` repos; select one or more; extract a source ZIP for each |
+| 📄 **Gitignore** | Generate a `.gitignore` by picking from language/framework templates (Python, Go, Node, etc.) — single or combined |
+| 🔧 **Git Init** | `git init` a directory; optionally set the default branch name; equivalent to `git init.sh` |
+| 🔗 **Git Remote** | Add or replace `origin` remote on an existing repo (`git remote add / set-url`) |
+| ⬆️ **Git Push** | Stage all → commit with message → push to `origin`; handles first-push (`--set-upstream`) automatically |
+| 📥 **Source Clone** | Clone any repo URL into a chosen local directory; supports SSH and HTTPS |
+
+### Typical workflow
+
+```
+Git Binary   →  verify / install git
+Git Init     →  initialise repo in your project folder
+Gitignore    →  generate and write .gitignore
+Git Remote   →  point origin at your Forgejo instance
+Git Push     →  stage + commit + push
+```
+
+### Package layout
+
+`forge_git_manager` lives at `gui/forge_git_manager/` and is imported lazily on first click — it does not add any startup cost to `forgejo-forge-gui`.
+
+```
+gui/forge_git_manager/
+├── app.py                  # ForgeGitManagerApp (QWidget) — main window, all tabs
+├── theme.py                # Slate-900 / amber accent stylesheet (scoped to the window)
+├── workers.py              # QThread workers: GitInitWorker, GitPushWorker, CloneWorker, …
+├── git_config.py           # git binary detection, Termux / proot / root helpers
+├── gitignore_templates.py  # built-in template library (~30 languages / frameworks)
+└── __init__.py
+```
+
+> **Standalone use:** `forge_git_manager` can also be run on its own — `python -m forge_git_manager` — from inside the `gui/` directory.
+
+---
+
 ## Runner (CI / Forgejo Actions)
 
 `forgejo-forge runner` manages a [forgejo-runner](https://code.forgejo.org/forgejo/runner) / [gitea-runner](https://gitea.com/gitea/runner) instance — the agent that picks up Forgejo Actions / CI jobs.
@@ -396,24 +442,32 @@ forgejo-forge/
 │   ├── forgejo-forge.py        # entry point (unchanged — Makefile + CI use this path)
 │   ├── requirements.txt
 │   ├── forgejo-forge.png       # app icon
-│   └── forge/                  # GUI package (split from the original monolithic script)
-│       ├── constants.py        # Catppuccin Mocha colors, Qt stylesheet, app constants
-│       ├── mainwindow.py       # ForgejoForgeGUI — main window + all slot logic
-│       ├── dialogs/
-│       │   └── ini_editor.py   # IniSyntaxHighlighter + IniEditorDialog
-│       ├── tabs/               # one file per tab
-│       │   ├── setup.py        # ⚙ Setup (credentials, port, domain, actions, push-create)
-│       │   ├── control.py      # ▶ Control (start / stop / restart / uninstall)
-│       │   ├── email.py        # 📧 Email / SMTP config
-│       │   ├── runner.py       # 🏃 Runner (install, register, start, stop, status)
-│       │   ├── logs.py         # 📄 Log viewer (follow mode, line cap)
-│       │   └── binary.py       # 🔧 Binary detect, path override, install/update
-│       ├── workers/
-│       │   ├── base.py         # CommandWorker, InstallerWorker, LogFollowWorker
-│       │   └── binary_check.py # BinaryCheckWorker (version detect + upstream API)
-│       └── utils/
-│           ├── binary.py       # find_binary(), find_installer_binary(), screen_aware_size()
-│           └── ansi.py         # strip_ansi()
+│   ├── forge/                  # forgejo-forge GUI package
+│   │   ├── constants.py        # Catppuccin Mocha colors, Qt stylesheet, app constants
+│   │   ├── mainwindow.py       # ForgejoForgeGUI — main window + all slot logic
+│   │   ├── dialogs/
+│   │   │   └── ini_editor.py   # IniSyntaxHighlighter + IniEditorDialog
+│   │   ├── tabs/               # one file per tab
+│   │   │   ├── setup.py        # ⚙ Setup (credentials, port, domain, actions, push-create)
+│   │   │   ├── control.py      # ▶ Control (start / stop / restart / uninstall)
+│   │   │   ├── email.py        # 📧 Email / SMTP config
+│   │   │   ├── runner.py       # 🏃 Runner (install, register, start, stop, status)
+│   │   │   ├── logs.py         # 📄 Log viewer (follow mode, line cap)
+│   │   │   ├── binary.py       # 🔧 Binary detect, path override, install/update
+│   │   │   └── git_manager.py  # ⬡ Git Manager launcher tab
+│   │   ├── workers/
+│   │   │   ├── base.py         # CommandWorker, InstallerWorker, LogFollowWorker
+│   │   │   └── binary_check.py # BinaryCheckWorker (version detect + upstream API)
+│   │   └── utils/
+│   │       ├── binary.py       # find_binary(), find_installer_binary(), screen_aware_size()
+│   │       └── ansi.py         # strip_ansi()
+│   └── forge_git_manager/      # Forge Git Manager (embedded, also runnable standalone)
+│       ├── app.py              # ForgeGitManagerApp — main window, all 7 tabs
+│       ├── theme.py            # slate-900 / amber stylesheet (scoped to window only)
+│       ├── workers.py          # QThread workers (git init, push, clone, extractor, …)
+│       ├── git_config.py       # git binary detection, Termux / proot / root helpers
+│       ├── gitignore_templates.py  # ~30 built-in language/framework templates
+│       └── __init__.py
 └── Makefile
 ```
 
