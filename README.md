@@ -162,14 +162,14 @@ forgejo-main uninstall    # Remove the binary
 ## forgejo-forge CLI
 
 ```
-forgejo-forge setup       [--username] [--password] [--email] [--port] [--domain] [--actions]
+forgejo-forge setup       [--username] [--password] [--email] [--port] [--domain] [--actions] [--push-create]
 forgejo-forge start
 forgejo-forge stop
 forgejo-forge restart
 forgejo-forge status
 forgejo-forge logs        [-f] [-n <lines>]
 forgejo-forge email-setup [--from] [--user] [--passwd] [--smtp-addr] [--smtp-port] [--protocol]
-forgejo-forge config      path | sections | list | get | set | remove | raw-get | raw-set | enable-actions
+forgejo-forge config      path | sections | list | get | set | remove | raw-get | raw-set | enable-actions | enable-push-create
 forgejo-forge uninstall
 ```
 
@@ -187,7 +187,8 @@ Auto-detects mode on every run:
 | `--email` | `<username>@example.com` | Admin email |
 | `--port` | `3000` | HTTP port (auto-increments if busy) |
 | `--domain` | — | Custom domain for `ROOT_URL` |
-| `--actions` | `false` | Enable Forgejo Actions (CI/CD) + local artifact storage in `app.ini` |
+| `--actions` | `true` | Enable Forgejo Actions (CI/CD) + local artifact storage in `app.ini` |
+| `--push-create` | `true` | Enable push-to-create for users and orgs (`ENABLE_PUSH_CREATE_USER`, `ENABLE_PUSH_CREATE_ORG`) |
 
 ### email-setup flags
 
@@ -216,6 +217,7 @@ forgejo-forge config remove <section> <key>            # remove a key (drops sec
 forgejo-forge config raw-get                            # print the entire app.ini
 forgejo-forge config raw-set                            # replace app.ini from stdin (writes app.ini.bak first)
 forgejo-forge config enable-actions                     # enable [actions] + [actions.artifacts] on an existing install
+forgejo-forge config enable-push-create                 # enable push-to-create for users and orgs on an existing install
 ```
 
 `set`/`remove`/`raw-set`/`enable-actions` don't restart Forgejo automatically — run `forgejo-forge restart` afterwards for changes to take effect.
@@ -232,6 +234,16 @@ PATH = <data-dir>/artifacts
 ```
 
 > The GUI exposes this as **📝 Edit app.ini** (full editor with syntax highlighting + warnings for duplicate sections / malformed lines) and **Apply Now** next to the Actions checkbox (runs `config enable-actions` without re-running setup).
+
+`enable-push-create` writes:
+
+```ini
+[repository]
+ENABLE_PUSH_CREATE_USER = true
+ENABLE_PUSH_CREATE_ORG  = true
+```
+
+This lets users and org members create a new repository by simply pushing to a non-existent remote — no need to create it in the UI first. Enabled by default on fresh `setup` runs. For existing installs, run `forgejo-forge config enable-push-create` then `forgejo-forge restart`.
 
 ---
 
@@ -380,7 +392,28 @@ forgejo-forge/
 │       ├── download/           # dual-source downloader (Codeberg / dl.gitea.com)
 │       ├── install/            # install/uninstall binary
 │       └── version/            # version fetch (Codeberg API / GitHub API)
-├── gui/                        # PyQt6 GUI (incl. app.ini editor dialog + INI syntax highlighter)
+├── gui/                        # PyQt6 GUI
+│   ├── forgejo-forge.py        # entry point (unchanged — Makefile + CI use this path)
+│   ├── requirements.txt
+│   ├── forgejo-forge.png       # app icon
+│   └── forge/                  # GUI package (split from the original monolithic script)
+│       ├── constants.py        # Catppuccin Mocha colors, Qt stylesheet, app constants
+│       ├── mainwindow.py       # ForgejoForgeGUI — main window + all slot logic
+│       ├── dialogs/
+│       │   └── ini_editor.py   # IniSyntaxHighlighter + IniEditorDialog
+│       ├── tabs/               # one file per tab
+│       │   ├── setup.py        # ⚙ Setup (credentials, port, domain, actions, push-create)
+│       │   ├── control.py      # ▶ Control (start / stop / restart / uninstall)
+│       │   ├── email.py        # 📧 Email / SMTP config
+│       │   ├── runner.py       # 🏃 Runner (install, register, start, stop, status)
+│       │   ├── logs.py         # 📄 Log viewer (follow mode, line cap)
+│       │   └── binary.py       # 🔧 Binary detect, path override, install/update
+│       ├── workers/
+│       │   ├── base.py         # CommandWorker, InstallerWorker, LogFollowWorker
+│       │   └── binary_check.py # BinaryCheckWorker (version detect + upstream API)
+│       └── utils/
+│           ├── binary.py       # find_binary(), find_installer_binary(), screen_aware_size()
+│           └── ansi.py         # strip_ansi()
 └── Makefile
 ```
 
