@@ -188,18 +188,19 @@ class GitInitWorker(QThread):
 # ── Git Remote Worker ─────────────────────────────────────────────────────────
 
 class GitRemoteWorker(QThread):
-    """Add 'local' remote to each project."""
+    """Add a remote to each project."""
 
     progress_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
     def __init__(self, projects_dir: str, username: str, token: str, host: str,
-                 single_folder: bool = False):
+                 remote_name: str = "local", single_folder: bool = False):
         super().__init__()
         self.projects_dir = projects_dir
         self.username = username
         self.token = token
         self.host = host
+        self.remote_name = remote_name.strip() or "local"
         self.single_folder = single_folder
 
     def run(self):
@@ -229,21 +230,27 @@ class GitRemoteWorker(QThread):
                 continue
 
             try:
-                rc, url_out, _ = _run_git("remote", "get-url", "local", cwd=path, timeout=15)
+                rc, url_out, _ = _run_git(
+                    "remote", "get-url", self.remote_name, cwd=path, timeout=15
+                )
                 if rc == 0:
-                    self.progress_signal.emit("⚠️  Remote 'local' already exists.")
+                    self.progress_signal.emit(f"⚠️  Remote '{self.remote_name}' already exists.")
                     self.progress_signal.emit(f"🔗  {url_out.strip()}")
                 else:
-                    remote_url = (
-                        f"http://{self.username}:{self.token}"
-                        f"@{self.host}/{self.username}/{folder_name}.git"
-                    )
+                    if self.token:
+                        remote_url = (
+                            f"http://{self.username}:{self.token}"
+                            f"@{self.host}/{self.username}/{folder_name}.git"
+                        )
+                    else:
+                        remote_url = f"http://{self.host}/{self.username}/{folder_name}.git"
+
                     rc2, _, err2 = _run_git(
-                        "remote", "add", "local", remote_url, cwd=path, timeout=15
+                        "remote", "add", self.remote_name, remote_url, cwd=path, timeout=15
                     )
                     if rc2 == 0:
-                        masked = remote_url.replace(self.token, "****")
-                        self.progress_signal.emit("✅  Remote 'local' added.")
+                        masked = remote_url.replace(self.token, "****") if self.token else remote_url
+                        self.progress_signal.emit(f"✅  Remote '{self.remote_name}' added.")
                         self.progress_signal.emit(f"🔗  {masked}")
                     else:
                         self.progress_signal.emit(f"❌  Failed: {err2.strip()}")
@@ -265,14 +272,16 @@ class GitRemoteWorker(QThread):
 # ── Git Push Worker ───────────────────────────────────────────────────────────
 
 class GitPushWorker(QThread):
-    """Push each project to 'local' remote."""
+    """Push each project to a configurable remote/branch."""
 
     progress_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
-    def __init__(self, projects_dir: str):
+    def __init__(self, projects_dir: str, remote_name: str = "local", branch: str = "main"):
         super().__init__()
         self.projects_dir = projects_dir
+        self.remote_name = remote_name.strip() or "local"
+        self.branch = branch.strip() or "main"
 
     def run(self):
         base = self.projects_dir
@@ -282,7 +291,7 @@ class GitPushWorker(QThread):
             return
 
         self.progress_signal.emit("=" * 40)
-        self.progress_signal.emit("🚀  Pushing repositories to 'local' remote...")
+        self.progress_signal.emit(f"🚀  Pushing repositories to '{self.remote_name}' remote...")
         self.progress_signal.emit("=" * 40)
 
         folders = sorted(
@@ -297,13 +306,15 @@ class GitPushWorker(QThread):
                 self.progress_signal.emit("⚠️  Not a Git repository — skipping.")
                 continue
 
-            rc, _, _ = _run_git("remote", "get-url", "local", cwd=path, timeout=15)
+            rc, _, _ = _run_git("remote", "get-url", self.remote_name, cwd=path, timeout=15)
             if rc != 0:
-                self.progress_signal.emit("⚠️  Remote 'local' not found — skipping.")
+                self.progress_signal.emit(f"⚠️  Remote '{self.remote_name}' not found — skipping.")
                 continue
 
             try:
-                rc2, out2, err2 = _run_git("push", "-u", "local", "main", cwd=path, timeout=120)
+                rc2, out2, err2 = _run_git(
+                    "push", "-u", self.remote_name, self.branch, cwd=path, timeout=120
+                )
                 if rc2 == 0:
                     self.progress_signal.emit(f"✅  Pushed: {folder}")
                     if err2.strip():

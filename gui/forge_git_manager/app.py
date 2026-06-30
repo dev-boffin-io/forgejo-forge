@@ -55,6 +55,8 @@ DEFAULT_DESKTOP_DIR   = _default_desktop()
 DEFAULT_USERNAME      = ""
 DEFAULT_TOKEN         = ""
 DEFAULT_HOST          = "localhost:3000"
+DEFAULT_REMOTE_NAME   = "local"
+DEFAULT_BRANCH        = "main"
 
 
 # ── Shared UI helpers ─────────────────────────────────────────────────────────
@@ -890,8 +892,9 @@ class GitRemoteTab(QWidget):
         info.setObjectName("infoBox")
         info_lbl = QLabel(
             "📋  Equivalent to git_remote.sh\n"
-            "Adds a remote named 'local' to every project:\n"
-            "http://USERNAME:TOKEN@HOST/USERNAME/PROJECT.git"
+            "Adds a remote to every project:\n"
+            "http://[USERNAME:TOKEN@]HOST/USERNAME/PROJECT.git\n"
+            "Leave Access Token empty to add a remote without embedded credentials."
         )
         info_lbl.setObjectName("infoText")
         info_lbl.setWordWrap(True)
@@ -910,13 +913,20 @@ class GitRemoteTab(QWidget):
         )
         layout.addWidget(self.projects_row)
 
+        # Remote name
+        self.remote_name_row = FieldInputRow(
+            "Remote Name", "e.g. local, origin, upstream", DEFAULT_REMOTE_NAME
+        )
+        layout.addWidget(self.remote_name_row)
+
         # Username
         self.user_row = FieldInputRow("Forgejo Username", "e.g. my-username", DEFAULT_USERNAME)
         layout.addWidget(self.user_row)
 
         # Token
         self.token_row = FieldInputRow(
-            "Access Token", "Forgejo API token", DEFAULT_TOKEN,
+            "Access Token (optional — leave empty for no embedded credentials)",
+            "Forgejo API token", DEFAULT_TOKEN,
             echo_mode=QLineEdit.EchoMode.Password
         )
         layout.addWidget(self.token_row)
@@ -961,12 +971,18 @@ class GitRemoteTab(QWidget):
 
     def _run(self):
         projects_dir = self.projects_row.input.text().strip()
+        remote_name = self.remote_name_row.input.text().strip() or "local"
         username = self.user_row.input.text().strip()
         token = self.token_row.input.text().strip()
         host = self.host_row.input.text().strip()
 
-        if not all([projects_dir, username, token, host]):
-            QMessageBox.warning(self, "Warning", "Please fill in all fields.")
+        # Token is optional — everything else is required.
+        if not all([projects_dir, username, host]):
+            QMessageBox.warning(
+                self, "Warning",
+                "Please fill in Projects Directory, Username, and Host.\n"
+                "(Access Token may be left empty.)"
+            )
             return
 
         single = self.single_chk.isChecked()
@@ -975,7 +991,10 @@ class GitRemoteTab(QWidget):
         self.log.clear()
         self.log.append("🔗  Configuring remotes...\n")
 
-        self.worker = GitRemoteWorker(projects_dir, username, token, host, single_folder=single)
+        self.worker = GitRemoteWorker(
+            projects_dir, username, token, host,
+            remote_name=remote_name, single_folder=single,
+        )
         self.worker.progress_signal.connect(self.log.append)
         self.worker.finished_signal.connect(self._done)
         self.worker.start()
@@ -1004,8 +1023,8 @@ class GitPushTab(QWidget):
         info.setObjectName("infoBox")
         info_lbl = QLabel(
             "📋  Equivalent to git_push.sh\n"
-            "Pushes every project to the 'local' remote:\n"
-            "git push -u local main"
+            "Pushes every project to the chosen remote and branch:\n"
+            "git push -u <remote> <branch>"
         )
         info_lbl.setObjectName("infoText")
         info_lbl.setWordWrap(True)
@@ -1023,12 +1042,26 @@ class GitPushTab(QWidget):
         )
         layout.addWidget(self.projects_row)
 
-        # Run button
-        self.run_btn = QPushButton("⬆️  Push All Projects to 'local' Remote")
+        # Remote name
+        self.remote_name_row = FieldInputRow(
+            "Remote Name", "e.g. local, origin, upstream", DEFAULT_REMOTE_NAME
+        )
+        layout.addWidget(self.remote_name_row)
+
+        # Branch
+        self.branch_row = FieldInputRow(
+            "Branch", "e.g. main, master", DEFAULT_BRANCH
+        )
+        layout.addWidget(self.branch_row)
+
+        # Run button — label updates live as remote name changes
+        self.run_btn = QPushButton(f"⬆️  Push All Projects to '{DEFAULT_REMOTE_NAME}' Remote")
         self.run_btn.setObjectName("extractBtn")
         self.run_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.run_btn.clicked.connect(self._run)
         layout.addWidget(self.run_btn)
+
+        self.remote_name_row.input.textChanged.connect(self._update_btn_label)
 
         self.progress_bar = make_progress_bar()
         layout.addWidget(self.progress_bar)
@@ -1036,6 +1069,10 @@ class GitPushTab(QWidget):
         layout.addWidget(SectionLabel("Output Log"))
         self.log = make_log_area()
         layout.addWidget(self.log)
+
+    def _update_btn_label(self, text: str):
+        name = text.strip() or "local"
+        self.run_btn.setText(f"⬆️  Push All Projects to '{name}' Remote")
 
     def _browse(self, line_edit: QLineEdit):
         folder = QFileDialog.getExistingDirectory(self, "Select Directory")
@@ -1048,12 +1085,15 @@ class GitPushTab(QWidget):
             QMessageBox.warning(self, "Warning", "Please set the Projects Directory.")
             return
 
+        remote_name = self.remote_name_row.input.text().strip() or "local"
+        branch = self.branch_row.input.text().strip() or "main"
+
         self.run_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.log.clear()
         self.log.append("⬆️  Pushing repositories...\n")
 
-        self.worker = GitPushWorker(projects_dir)
+        self.worker = GitPushWorker(projects_dir, remote_name=remote_name, branch=branch)
         self.worker.progress_signal.connect(self.log.append)
         self.worker.finished_signal.connect(self._done)
         self.worker.start()
