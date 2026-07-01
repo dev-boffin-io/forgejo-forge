@@ -341,13 +341,18 @@ class GitPushWorker(QThread):
 # ── Clone Worker ──────────────────────────────────────────────────────────────
 
 class CloneWorker(QThread):
-    """Clone repos from Forgejo bare storage to a destination folder."""
+    """Clone repos from Forgejo bare storage to a destination folder.
+
+    When *local_mode* is True the source bare repo path is used directly
+    as the clone URL — no HTTP, no credentials needed.
+    """
 
     progress_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
     def __init__(self, repos: list[str], source_dir: str, desktop_dir: str,
-                 username: str, token: str, host: str):
+                 username: str, token: str, host: str,
+                 local_mode: bool = False):
         super().__init__()
         self.repos = repos
         self.source_dir = source_dir
@@ -355,6 +360,7 @@ class CloneWorker(QThread):
         self.username = username
         self.token = token
         self.host = host
+        self.local_mode = local_mode
 
     def run(self):
         total = len(self.repos)
@@ -372,21 +378,38 @@ class CloneWorker(QThread):
                 success += 1
                 continue
 
-            clone_url = (
-                f"http://{self.username}:{self.token}"
-                f"@{self.host}/{self.username}/{project_name}.git"
-            )
-            masked_url = clone_url.replace(self.token, "****")
-            self.progress_signal.emit(f"🔗  {masked_url}")
+            if self.local_mode:
+                clone_url = os.path.join(self.source_dir, repo_name)
+                self.progress_signal.emit(f"📁  {clone_url}  →  {clone_target}")
+            else:
+                if self.token:
+                    clone_url = (
+                        f"http://{self.username}:{self.token}"
+                        f"@{self.host}/{self.username}/{project_name}.git"
+                    )
+                    masked_url = clone_url.replace(self.token, "****")
+                else:
+                    clone_url = (
+                        f"http://{self.host}/{self.username}/{project_name}.git"
+                    )
+                    masked_url = clone_url
+                self.progress_signal.emit(f"🔗  {masked_url}")
 
             try:
-                rc, out, err = _run_git("clone", clone_url, clone_target, timeout=180)
+                if self.local_mode:
+                    rc, out, err = _run_git(
+                        "clone", "--no-hardlinks", clone_url, clone_target, timeout=180
+                    )
+                else:
+                    rc, out, err = _run_git("clone", clone_url, clone_target, timeout=180)
                 if rc == 0:
                     self.progress_signal.emit(f"✅  Cloned → {clone_target}")
                     success += 1
                 else:
-                    msg = (err or out).strip().replace(self.token, "****") or "Unknown error"
-                    self.progress_signal.emit(f"❌  Failed: {msg}")
+                    raw = (err or out).strip()
+                    if not self.local_mode and self.token:
+                        raw = raw.replace(self.token, "****")
+                    self.progress_signal.emit(f"❌  Failed: {raw or 'Unknown error'}")
                     failed += 1
             except subprocess.TimeoutExpired:
                 self.progress_signal.emit("⏱️  Timed out after 180 s")

@@ -1394,15 +1394,19 @@ class SourceCloneTab(QWidget):
 
         info = QFrame()
         info.setObjectName("infoBox")
-        info_lbl = QLabel(
-            "📋  Clones repositories to the Desktop as  <project>-source-code  folders.\n"
-            "Command:  git clone http://.../<project>.git <project>-source-code\n"
-            "To remove a clone, select it below and click 'Remove Selected Clones'."
-        )
-        info_lbl.setObjectName("infoText")
-        info_lbl.setWordWrap(True)
-        QVBoxLayout(info).addWidget(info_lbl)
+        self._info_lbl = QLabel()
+        self._info_lbl.setObjectName("infoText")
+        self._info_lbl.setWordWrap(True)
+        QVBoxLayout(info).addWidget(self._info_lbl)
         layout.addWidget(info)
+
+        # ── Mode toggle ───────────────────────────────────────────────
+        self.chk_local = QCheckBox(
+            "📁  Local mode — clone directly from the bare .git folder (no HTTP, no credentials)"
+        )
+        self.chk_local.setObjectName("modeCheck")
+        self.chk_local.toggled.connect(self._on_mode_changed)
+        layout.addWidget(self.chk_local)
 
         # Bare repo source
         self.src_row = FolderInputRow(
@@ -1422,18 +1426,22 @@ class SourceCloneTab(QWidget):
         self.desktop_row.browse_btn.clicked.connect(lambda: self._browse(self.desktop_row.input))
         layout.addWidget(self.desktop_row)
 
-        # Credentials — vertical stack so labels never clip on any screen size
+        # Credentials (hidden in local mode)
         self.user_row = FieldInputRow("Username", "e.g. my-username", DEFAULT_USERNAME)
         layout.addWidget(self.user_row)
 
         self.token_row = FieldInputRow(
-            "Token", "Forgejo API token", DEFAULT_TOKEN,
+            "Token (optional — leave empty for no embedded credentials)",
+            "Forgejo API token", DEFAULT_TOKEN,
             echo_mode=QLineEdit.EchoMode.Password
         )
         layout.addWidget(self.token_row)
 
         self.host_row = FieldInputRow("Host", "e.g. localhost:3000", DEFAULT_HOST)
         layout.addWidget(self.host_row)
+
+        # initialise info label and credential visibility
+        self._on_mode_changed(False)
 
         # Scan button
         scan_btn = QPushButton("🔍  Scan Repositories")
@@ -1488,6 +1496,24 @@ class SourceCloneTab(QWidget):
         layout.addWidget(self.log)
         layout.addStretch()
 
+    def _on_mode_changed(self, local: bool):
+        for row in (self.user_row, self.token_row, self.host_row):
+            row.setVisible(not local)
+        if local:
+            self._info_lbl.setText(
+                "📋  Local mode — clones bare .git repos directly from the source folder.\n"
+                "Command:  git clone /path/to/project.git project-source-code\n"
+                "No HTTP, no username/token/host required.\n"
+                "To remove a clone, select it below and click 'Remove Selected Clones'."
+            )
+        else:
+            self._info_lbl.setText(
+                "📋  Remote mode — clones via HTTP from a Forgejo/Gitea instance.\n"
+                "Command:  git clone http://[USER:TOKEN@]HOST/USER/PROJECT.git project-source-code\n"
+                "Token is optional — leave empty to clone without embedded credentials.\n"
+                "To remove a clone, select it below and click 'Remove Selected Clones'."
+            )
+
     def _browse(self, line_edit: QLineEdit):
         folder = QFileDialog.getExistingDirectory(self, "Select Directory")
         if folder:
@@ -1534,14 +1560,24 @@ class SourceCloneTab(QWidget):
             QMessageBox.warning(self, "Warning", "Please select at least one repository to clone.")
             return
 
-        src = self.src_row.input.text().strip()
+        src     = self.src_row.input.text().strip()
         desktop = self.desktop_row.input.text().strip()
-        username = self.user_row.input.text().strip()
-        token = self.token_row.input.text().strip()
-        host = self.host_row.input.text().strip()
+        local   = self.chk_local.isChecked()
 
-        if not all([src, desktop, username, token, host]):
-            QMessageBox.warning(self, "Warning", "Please fill in all fields.")
+        if not src or not desktop:
+            QMessageBox.warning(self, "Warning", "Please set Source and Clone Destination.")
+            return
+
+        username = self.user_row.input.text().strip()
+        token    = self.token_row.input.text().strip()
+        host     = self.host_row.input.text().strip()
+
+        if not local and not all([username, host]):
+            QMessageBox.warning(
+                self, "Warning",
+                "Remote mode requires Username and Host.\n"
+                "(Token may be left empty.)"
+            )
             return
 
         repos = []
@@ -1554,9 +1590,13 @@ class SourceCloneTab(QWidget):
         self.delete_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.log.clear()
-        self.log.append(f"📥  Cloning {len(repos)} repo(s)...\n")
+        mode_label = "local path" if local else "HTTP remote"
+        self.log.append(f"📥  Cloning {len(repos)} repo(s) via {mode_label}...\n")
 
-        self.clone_worker = CloneWorker(repos, src, desktop, username, token, host)
+        self.clone_worker = CloneWorker(
+            repos, src, desktop, username, token, host,
+            local_mode=local,
+        )
         self.clone_worker.progress_signal.connect(self.log.append)
         self.clone_worker.finished_signal.connect(self._clone_done)
         self.clone_worker.start()
