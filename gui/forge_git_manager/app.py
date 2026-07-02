@@ -1451,19 +1451,48 @@ class SourceCloneTab(QWidget):
         layout.addWidget(scan_btn)
 
         # Repo list
-        layout.addWidget(SectionLabel(
+        # Repo list header row with Select All
+        repo_header = QHBoxLayout()
+        repo_header.addWidget(SectionLabel(
             "Repositories  ·  ✅ = Already Cloned  ·  Ctrl+Click multi-select"
         ))
+        repo_header.addStretch()
+        self.btn_select_all_repos = QPushButton("Select All")
+        self.btn_select_all_repos.setFixedHeight(34)
+        self.btn_select_all_repos.setContentsMargins(8, 0, 8, 0)
+        self.btn_select_all_repos.clicked.connect(lambda: self.repo_list.selectAll())
+        self.btn_deselect_repos = QPushButton("Deselect")
+        self.btn_deselect_repos.setFixedHeight(34)
+        self.btn_deselect_repos.setContentsMargins(8, 0, 8, 0)
+        self.btn_deselect_repos.clicked.connect(lambda: self.repo_list.clearSelection())
+        repo_header.addWidget(self.btn_select_all_repos)
+        repo_header.addWidget(self.btn_deselect_repos)
+        layout.addLayout(repo_header)
+
         self.repo_list = QListWidget()
         self.repo_list.setObjectName("repoList")
         self.repo_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.repo_list.setMinimumHeight(110)
         layout.addWidget(self.repo_list)
 
-        # Existing clones list
-        layout.addWidget(SectionLabel(
+        # Existing clones list header row with Select All
+        clone_header = QHBoxLayout()
+        clone_header.addWidget(SectionLabel(
             "Existing -source-code Clones  ·  Select to Remove"
         ))
+        clone_header.addStretch()
+        self.btn_select_all_clones = QPushButton("Select All")
+        self.btn_select_all_clones.setFixedHeight(34)
+        self.btn_select_all_clones.setContentsMargins(8, 0, 8, 0)
+        self.btn_select_all_clones.clicked.connect(lambda: self.clone_list.selectAll())
+        self.btn_deselect_clones = QPushButton("Deselect")
+        self.btn_deselect_clones.setFixedHeight(34)
+        self.btn_deselect_clones.setContentsMargins(8, 0, 8, 0)
+        self.btn_deselect_clones.clicked.connect(lambda: self.clone_list.clearSelection())
+        clone_header.addWidget(self.btn_select_all_clones)
+        clone_header.addWidget(self.btn_deselect_clones)
+        layout.addLayout(clone_header)
+
         self.clone_list = QListWidget()
         self.clone_list.setObjectName("repoList")
         self.clone_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
