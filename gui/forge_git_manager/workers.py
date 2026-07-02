@@ -345,6 +345,8 @@ class CloneWorker(QThread):
 
     When *local_mode* is True the source bare repo path is used directly
     as the clone URL — no HTTP, no credentials needed.
+    When *add_suffix* is False the cloned folder name matches the repo
+    name exactly (no '-source-code' appended).
     """
 
     progress_signal = pyqtSignal(str)
@@ -352,7 +354,7 @@ class CloneWorker(QThread):
 
     def __init__(self, repos: list[str], source_dir: str, desktop_dir: str,
                  username: str, token: str, host: str,
-                 local_mode: bool = False):
+                 local_mode: bool = False, add_suffix: bool = True):
         super().__init__()
         self.repos = repos
         self.source_dir = source_dir
@@ -361,6 +363,7 @@ class CloneWorker(QThread):
         self.token = token
         self.host = host
         self.local_mode = local_mode
+        self.add_suffix = add_suffix
 
     def run(self):
         total = len(self.repos)
@@ -369,7 +372,8 @@ class CloneWorker(QThread):
 
         for idx, repo_name in enumerate(self.repos, start=1):
             project_name = repo_name.removesuffix(".git")
-            clone_target = os.path.join(self.desktop_dir, f"{project_name}-source-code")
+            folder_name  = f"{project_name}-source-code" if self.add_suffix else project_name
+            clone_target = os.path.join(self.desktop_dir, folder_name)
 
             self.progress_signal.emit(f"\n[{idx}/{total}]  🔄  Cloning: {project_name}")
 

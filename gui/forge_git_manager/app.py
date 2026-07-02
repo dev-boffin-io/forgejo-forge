@@ -1499,6 +1499,14 @@ class SourceCloneTab(QWidget):
         self.clone_list.setMinimumHeight(90)
         layout.addWidget(self.clone_list)
 
+        # Suffix toggle
+        self.chk_suffix = QCheckBox(
+            "Append '-source-code' to cloned folder names  (e.g. api-forge-source-code)"
+        )
+        self.chk_suffix.setObjectName("modeCheck")
+        self.chk_suffix.setChecked(True)
+        layout.addWidget(self.chk_suffix)
+
         # Action buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(12)
@@ -1564,18 +1572,29 @@ class SourceCloneTab(QWidget):
             if os.path.isdir(os.path.join(src, d)) and d.endswith(".git")
         )
 
+        use_suffix = self.chk_suffix.isChecked()
+
         for repo in repos:
             project = repo.removesuffix(".git")
-            clone_path = os.path.join(desktop, f"{project}-source-code")
+            folder_name = f"{project}-source-code" if use_suffix else project
+            clone_path = os.path.join(desktop, folder_name)
             already = os.path.isdir(clone_path)
             display = f"{'✅' if already else '⬜'}  {repo}"
             self.repo_list.addItem(display)
 
         if os.path.isdir(desktop):
-            clones = sorted(
-                d for d in os.listdir(desktop)
-                if os.path.isdir(os.path.join(desktop, d)) and d.endswith("-source-code")
-            )
+            if use_suffix:
+                clones = sorted(
+                    d for d in os.listdir(desktop)
+                    if os.path.isdir(os.path.join(desktop, d)) and d.endswith("-source-code")
+                )
+            else:
+                # Match folders whose name corresponds to a bare repo in src
+                repo_names = {r.removesuffix(".git") for r in repos}
+                clones = sorted(
+                    d for d in os.listdir(desktop)
+                    if os.path.isdir(os.path.join(desktop, d)) and d in repo_names
+                )
             self.clone_list.addItems(clones)
 
         self.log.append(
@@ -1625,6 +1644,7 @@ class SourceCloneTab(QWidget):
         self.clone_worker = CloneWorker(
             repos, src, desktop, username, token, host,
             local_mode=local,
+            add_suffix=self.chk_suffix.isChecked(),
         )
         self.clone_worker.progress_signal.connect(self.log.append)
         self.clone_worker.finished_signal.connect(self._clone_done)
